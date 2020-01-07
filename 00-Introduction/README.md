@@ -63,8 +63,19 @@
 
 
 
-## Resources
+## Lectures and Readings
 
 - David Silver's RL Course Lecture 1 - Introduction to Reinforcement
   Learning ([video](https://www.youtube.com/watch?v=2pWv7GOvuf0),
   [slides](http://www0.cs.ucl.ac.uk/staff/d.silver/web/Teaching_files/intro_RL.pdf))
+
+- Sutton and Barto -
+  [Reinforcement Learning: An Introduction](http://incompleteideas.net/book/RLbook2018.pdf) -
+  - Chapter 1: The Reinforcement Learning Problem
+  - Chapter 2: Multi-armed Bandits
+
+
+## Exercises
+
+- Implement multiarmed bandit algorithms, reproduce parameter study
+  plot from Sutton & Barto, Chp 2.  See `multiarmed_bandits.ipynb`

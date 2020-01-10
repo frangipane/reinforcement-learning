@@ -70,7 +70,7 @@ monte carlo, TD).
 Is an MRP with decisions.  Add in finite set of actions $A$.
 Trajectory is still an MRP, but now dynamics described by the policy.
 
-**Policy**
+#### Policy
 
 What action will an agent take in a state?  Policy maps state to
 probability of selecting each action: $\pi(a|s)$.
@@ -94,6 +94,68 @@ q_{\pi}(s, a) = \mathbb{e}_{\pi}( G_t | S_t = s, A_t = a )
 $$
 
 v, q for MDP similarly can be expressed as Bellman equations.
+
+
+#### Optimal value functions
+
+Optimal value functions tell you what the max reward is that you can
+extract from the system.
+
+Optimal state-value function: $v_*(s) = max_{\pi} v_{\pi}(s)$
+Optimal action-value function{ $q_*(s, a) = max_{\pi} q_(s, a)$
+
+Once you know the optimal value functions, it's easy to figure out the
+optimal policy.
+
+
+#### Optimal policy
+
+Definition of "optimal policy" \pi_*:
+
+$$
+\pi >= \pi’ if v_\pi(s) >= v_\pi’(s), for all s
+$$
+
+?? question: why use this definition of optimal policy where value
+functions have to be greater in a state by state comparison, rather
+than, e.g. the sum of the value functions?
+
+At least one optimal policy exists.
+
+The optimal policy deterministically chooses an action $a$ in state
+$s$ that maximizes the optimal action-value function (and chooses
+other actions with 0 probability).
+
+
+### Solve for optimal value functions --> Bellman Optimality Equations
+
+Lookahead again for state value function, but instead of taking
+average of lookahead q_values, TAKE THE MAX.
+
+$$
+v_*(s) = max_a q_*(s, a)
+$$
+
+Similarly, for the optimal action value function, $q_*$:
+
+$$
+q_*(s, a) = R^a_s + \gamma \sum_{s’ \elem S} P^a_{ss’} v_*(s’)
+$$
+
+Have to average over all the things the environment might do to us
+(optimal value fxns of states we end up in) after we take our action.
+
+
+Combine these two pieces to get v_* as a function of itself ( a 2 step
+lookahead) => Bellman Optimality Equation for v*:
+
+$$
+v_*(s) = max_a R^a_s + \gamma \sum_{s’ \elem S} P^a_{ss’} v_*(s’)
+$$
+
+*Notes*:
+- Bellman optimality equation is nonlinear because of the $max$.
+- no general closed form solution.
 
 
 ## Questions

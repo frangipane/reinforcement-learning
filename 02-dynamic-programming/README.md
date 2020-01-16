@@ -27,6 +27,7 @@ values of its neighbors' values and the one step reward.
 Note, in the process of evaluating a policy, the value function can
 help us figure out a better policy.
 
+
 ## Policy iteration
 
 Given a policy $\pi$, cycle through 2 steps:
@@ -42,7 +43,64 @@ policy, won’t result in worse performance).  If improvements stop,
 then the (one stpe lookahead form of) Bellman optimality eqn has been
 satisfied $v_{\pi}(s) = max_a q_{\pi}(s,a).
 
+
 ## Value iteration
+
+Principle of Optimality applied to value iteration -- If we knew the
+“final state” right before the goal / knew the reward associated with
+that, would take just one sweep backwards from that state (e.g. grid
+world structure knowing goal is in top left corner). Have to update
+all our states using one-state lookahead since we don’t know in
+advance the state right before goal.
+
+Value iteration uses Bellman optimality equation to find optimal
+policy (compare to Bellman expectation equation used for policy
+evaluation).
+
+Unlike policy iteration, value iteration does not alternate b/w policy
+evaluation (that looks at value function) and policy improvement --
+there is no explicit policy.  Value iteration only involves values
+(v_1 -> v_2 -> … ->v_*).
+
+Intermediate value fxns may not correspond to any policy.
+
+See value iteration demo:
+http://www.cs.ubc.ca/~poole/demos/mdp/vi.html
+
+
+## summary
+
+Problem | bellman equation | algorithm
+Prediction | bellman expectation equation | iterative policy evaluation
+Control | bellman expectation eqn + greedy policy improvement | policy iteration
+Control | bellman optimality eqn | value iteration
+
+Note: haven’t used action-value fxns, $q$, partly because higher
+complexity than working with state-value functions.  Later, q useful
+for model free because can avoid one step look ahead (don’t need to
+know dynamics).
+
+Hints for future: DP uses full-width backups (expensive -- effective
+for medium-sized problems, ~ millions of states). Later, we’ll sample
+backups (sample a single trajectory instead of full width) or sample
+transitions -- sample an action according to policy, sample a
+transition according to dynamics, then back up from that one sample --
+breaks curse of dimensionality => sample instead of needing to know
+env dynamics.
+
+
+## extra
+
+### asynchronous DP - for computational efficiency
+
+- Inplace
+- Prioritized (most important states, i.e. states changing the most)
+- Real time (only update states real agent is experiencing)
+
+### contraction mapping theorem:
+(in silver lecture notes)
+Discusses why value iteration, policy evaluation, policy iteration
+converge, why $v_*$ is unique.
 
 
 ## Questions

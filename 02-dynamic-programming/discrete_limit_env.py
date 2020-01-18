@@ -55,3 +55,55 @@ class DiscreteLimitActionsEnv(Env):
         self.lastaction = (self.s, a)
         self.s = s
         return (s, r, d, {"prob" : p})
+
+
+class StudentEnv(DiscreteLimitActionsEnv):
+    """
+    Student MDP from David Silver's Lecture 2.
+    
+    Actions (action_space):
+      Type: Tuple([spaces.Discrete(2),spaces.Discrete(2),spaces.Discrete(2),spaces.Discrete(2),])
+      Num   Observation   Actions
+      0     FACEBOOK      [0] facebook, [1] quit
+      1     CLASS1        [0] facebook, [1] study
+      2     CLASS2        [0] sleep, [1] study
+      3     CLASS3        [0] pub, [1] study
+      4     SLEEP         [0] sleep
+    """   
+    def __init__(self):
+        # states / observations
+        FACEBOOK = 0
+        CLASS1 = 1
+        CLASS2 = 2
+        CLASS3 = 3
+        SLEEP = 4  # terminal state
+        observations = [FACEBOOK, CLASS1, CLASS2, CLASS3, SLEEP]
+
+        nS = len(observations)
+
+        # initial state distribution (uniform)
+        isd = np.ones(nS) / nS
+
+        # P is a dict of dict of lists, where
+        #   P[s][a] == [(probability, nextstate, reward, done), ...]
+        P = {}
+        for s in observations:
+            P[s] = {}
+
+        P[FACEBOOK][0] = [(1, FACEBOOK, -1, False)]
+        P[FACEBOOK][1] = [(1, CLASS1, 0, False)]
+        P[CLASS1][0] = [(1, FACEBOOK, -1, False)]
+        P[CLASS1][1] = [(1, CLASS2, -2, False)]
+        P[CLASS2][0] = [(1, SLEEP, 0, True)]
+        P[CLASS2][1] = [(1, CLASS3, -2, False)]
+        P[CLASS3][0] = [(0.2, CLASS1, 1, False), 
+                        (0.4, CLASS2, 1, False), 
+                        (0.4, CLASS3, 1, False)]
+        P[CLASS3][1] = [(1, SLEEP, 10, True)]
+        P[SLEEP][0] = [(1, SLEEP, 0, True)]
+        
+        vA = []
+        for s in observations:
+            vA.append(len(P[s]))
+       
+        super().__init__(nS, vA, P, isd)

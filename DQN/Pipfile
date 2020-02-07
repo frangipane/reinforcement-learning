@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+numpy = "*"
+jupyter = "*"
+matplotlib = "*"
+gym = "*"
+torch = "*"
+torchvision = "*"
+
+[requires]
+python_version = "3.7"

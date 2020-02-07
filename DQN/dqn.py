@@ -69,14 +69,76 @@ class ReplayBuffer:
         return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
 
 
-def dqn(env_fn, actor_critic=MLPCritic, global_steps=10000, replay_size=500, 
-        seed=0,
+def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
+        seed=0, steps_per_epoch=100, epochs=100,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
         update_after=100, update_every=5,
         epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_steps=15,
         target_update_every=1000,
         record_video_every=100):
-    
+    """
+    Args:
+        env_fn : A function which creates a copy of the environment.
+            The environment must satisfy the OpenAI Gym API.
+
+        actor_critic: The constructor method for a PyTorch Module with an ``act``
+            method and a ``q`` module.
+            The ``act`` method module should accept batches of
+            observations as inputs, and ``q`` should accept a batch
+            of observations and a batch of actions as inputs. When called,
+            ``act`` and ``q`` should return:
+
+            ===========  ================  ======================================
+            Call         Output Shape      Description
+            ===========  ================  ======================================
+            ``act``      (batch, act_dim)  | Numpy array of actions for each
+                                           | observation.
+            ``q``        (batch,)          | Tensor containing the current estimate
+                                           | of Q* for the provided observations
+                                           | and actions. (Critical: make sure to
+                                           | flatten this!)
+            ===========  ================  ======================================
+
+        global_steps (int): Number of steps / frames for training (should be
+            greater than update_after!)
+
+        seed (int): Seed for random number generators.
+
+        steps_per_epoch (int): Number of steps of interaction (state-action pairs)
+            for the agent and the environment in each epoch.
+
+        epochs (int): Number of epochs to run and train agent.
+
+        replay_size (int): Maximum length of replay buffer.
+
+        gamma (float): Discount factor. (Always between 0 and 1.)
+
+        lr (float): Learning rate.
+
+        batch_size (int): Minibatch size for SGD.
+
+        start_steps (int): Number of steps for uniform-random action selection,
+            before running real policy. Helps exploration.
+
+        update_after (int): Number of env interactions to collect before
+            starting to do gradient descent updates. Ensures replay buffer
+            is full enough for useful updates.
+
+        update_every (int): Number of env interactions that should elapse
+            between gradient descent updates.
+
+        epsilon_start (float): Chance to sample a random action when taking an action.
+          Epsilon is decayed over time and this is the start value
+
+        epsilon_end (float): The final minimum value of epsilon after decaying is done
+
+        epsilon_decay_steps (int): Number of steps to decay epsilon over
+
+        target_update_every (int): Number of steps between updating target network
+            parameters, i.e. resetting Q_hat to Q.
+
+        record_video_every (int): Record a video every N episodes
+    """
     env = env_fn()
     env = Monitor(
         env, 
@@ -145,8 +207,10 @@ def dqn(env_fn, actor_critic=MLPCritic, global_steps=10000, replay_size=500,
     dqn_rewards_per_episode = []
     cum_reward = 0  # Track cumulative reward per episode
 
-    for t in range(global_steps):        
-        if t == global_steps - 1:
+    total_steps = steps_per_epoch * epochs
+
+    for t in range(total_steps):
+        if t == total_steps - 1:
             print('done')
             print('epsilon ', epsilon)
         

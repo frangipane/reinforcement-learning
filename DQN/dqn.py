@@ -289,7 +289,25 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     env.close()
 
 
+config_cartpole = dict(
+    replay_size = 500,
+    seed = 0,
+    steps_per_epoch = 3000,
+    epochs = 5,
+    gamma = 0.99,
+    lr = 0.00025,
+    batch_size = 32,
+    start_steps = 100,
+    update_after = 50,
+    update_every = 5,
+    epsilon_start = 1.0,
+    epsilon_end = 0.1,
+    epsilon_decay_steps = 15,
+    target_update_every = 1000,
+    record_video = False,
+    record_video_every = 100,
+    save_freq = 50
+)
+
 if __name__ == '__main__':
-    # TODO: WIP, should take in config
-    # for dqn args
-    dqn(lambda : gym.make('CartPole-v1'))
+    dqn(lambda : gym.make('CartPole-v1'), **config_cartpole)

@@ -6,13 +6,13 @@ with some utils taken from
 https://github.com/dennybritz/reinforcement-learning/blob/master/DQN/Deep%20Q%20Learning.ipynb
 
 TODOs:
-- implement logging
 - implement test agent
 - double check Monitor wrapper params (resume=True or False?)
 - use more realistic hyperparameters, do rewards improve per episode?
 - Atari environment-specific preprocessing for images, skip frames, concat inputs
 
 """
+import time
 from copy import deepcopy
 import numpy as np
 
@@ -23,6 +23,8 @@ import gym
 from gym.wrappers import Monitor
 # N.B. to use Monitor, need to have ffmpeg installed,
 # e.g. on macOS: brew install ffmpeg
+
+from spinup.utils.logx import EpochLogger
 
 from nnetworks import *
 
@@ -70,12 +72,12 @@ class ReplayBuffer:
 
 
 def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
-        seed=0, steps_per_epoch=100, epochs=100,
+        seed=0, steps_per_epoch=3000, epochs=5,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
-        update_after=100, update_every=5,
+        update_after=50, update_every=5,
         epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_steps=15,
-        target_update_every=1000,
-        record_video_every=100):
+        target_update_every=1000, record_video=False,
+        record_video_every=100, save_freq=50):
     """
     Args:
         env_fn : A function which creates a copy of the environment.
@@ -137,15 +139,25 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         target_update_every (int): Number of steps between updating target network
             parameters, i.e. resetting Q_hat to Q.
 
+        record_video (bool): Record a video
+
         record_video_every (int): Record a video every N episodes
+
+        save_freq (int): How often (in terms of gap between epochs) to save
+            the current model (value function).
     """
+    logger = EpochLogger(exp_name='dqn')
+    logger.save_config(locals())
+
     env = env_fn()
-    env = Monitor(
-        env, 
-        directory="/tmp/gym-results",
-        resume=True,
-        video_callable=lambda count: count % record_video_every == 0
-    )
+
+    if record_video:
+        env = Monitor(
+            env,
+            directory="/tmp/gym-results",
+            resume=True,
+            video_callable=lambda count: count % record_video_every == 0
+        )
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n  # assumes Discrete space
 
@@ -176,18 +188,26 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         # MSE loss against Bellman backup
         loss_q = ((q - backup)**2).mean()
         # TODO: clip Bellman error b/w -1 and 1
+
+        # Useful info for logging
+        loss_info = dict(QVals=q.detach().numpy())
         
-        return loss_q
+        return loss_q, loss_info
 
     # Set up optimizer for Q-function
     q_optimizer = torch.optim.RMSprop(ac.q.parameters(), lr=lr)
 
+    # Set up model saving
+    logger.setup_pytorch_saver(ac)
+
     # function to update parameters in Q
     def update(data):
         q_optimizer.zero_grad()
-        loss = compute_loss_q(data)
+        loss, loss_info = compute_loss_q(data)
         loss.backward()
         q_optimizer.step()
+
+        logger.store(LossQ=loss.item(), **loss_info)
 
     def get_action(o):
         return ac.act(torch.as_tensor(o, dtype=torch.float32))
@@ -203,17 +223,11 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     # Initialize experience replay buffer
     replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
-    o = env.reset()
-    dqn_rewards_per_episode = []
-    cum_reward = 0  # Track cumulative reward per episode
-
     total_steps = steps_per_epoch * epochs
+    start_time = time.time()
+    o, ep_ret, ep_len = env.reset(), 0, 0
 
     for t in range(total_steps):
-        if t == total_steps - 1:
-            print('done')
-            print('epsilon ', epsilon)
-        
         # epsilon for this time step
         epsilon = epsilons[min(t, epsilon_decay_steps-1)]
 
@@ -231,7 +245,8 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             
         # Step the env
         o2, r, d, _ = env.step(a)
-        cum_reward += r
+        ep_ret += r
+        ep_len += 1
         
         # Store transition to replay buffer
         replay_buffer.store(o, a, r, o2, d)
@@ -241,28 +256,40 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         
         # End of episode handling
         if d:
-            dqn_rewards_per_episode.append(cum_reward)
-            o = env.reset()
-            cum_reward = 0
+            logger.store(EpRet=ep_ret, EpLen=ep_len)
+            o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
         if t >= update_after and t % update_every == 0:
             minibatch = replay_buffer.sample_batch(batch_size)
             update(data=minibatch)
-            
+
         # Refresh target Q network
         if t % target_update_every == 0:
             target_q_network.load_state_dict(ac.q.state_dict())
+
+        # End of epoch handling
+        if (t+1) % steps_per_epoch == 0:
+            epoch = (t+1) // steps_per_epoch
+
+            # Save model
+            if (epoch % save_freq == 0) or (epoch == epochs):
+                logger.save_state({'env': env}, None)
+
+            # Log info about epoch
+            logger.log_tabular('Epoch', epoch)
+            logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
+            logger.log_tabular('EpLen', average_only=True)
+            logger.log_tabular('TotalEnvInteracts', t)
+            logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
+            logger.log_tabular('LossQ', average_only=True)
+            logger.log_tabular('Time', time.time()-start_time)
+            logger.dump_tabular()
             
     env.close()
-    return dqn_rewards_per_episode
 
 
 if __name__ == '__main__':
     # TODO: WIP, should take in config
     # for dqn args
-    import matplotlib
-    import matplotlib.pyplot as plt
-    
-    rewards = dqn(lambda : gym.make('CartPole-v1'))
-    plt.plot(rewards)
+    dqn(lambda : gym.make('CartPole-v1'))

@@ -43,7 +43,7 @@ class MLPCritic(nn.Module):
     def act(self, obs):
         """Return an action (an integer)"""
         with torch.no_grad():
-            a = np.argmax(self.q(obs)).numpy()
+            a = torch.argmax(self.q(obs)).numpy()
             return a
 
 

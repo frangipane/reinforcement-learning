@@ -2,11 +2,8 @@
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ddpg
 and
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/sac
-with some utils taken from
-https://github.com/dennybritz/reinforcement-learning/blob/master/DQN/Deep%20Q%20Learning.ipynb
 
 TODOs:
-- implement test agent
 - double check Monitor wrapper params (resume=True or False?)
 - use more realistic hyperparameters, do rewards improve per episode?
 - Atari environment-specific preprocessing for images, skip frames, concat inputs
@@ -68,15 +65,17 @@ class ReplayBuffer:
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.int32) if k == 'act'
+                else torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
 
 
 def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         seed=0, steps_per_epoch=3000, epochs=5,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
         update_after=50, update_every=5,
-        epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_steps=15,
-        target_update_every=1000, record_video=False,
+        epsilon_start=1.0, epsilon_end=0.1, epsilon_step=1e-4,
+        target_update_every=1000, num_test_episodes=10, max_ep_len=200,
+        record_video=False,
         record_video_every=100, save_freq=50):
     """
     Args:
@@ -132,12 +131,18 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         epsilon_start (float): Chance to sample a random action when taking an action.
           Epsilon is decayed over time and this is the start value
 
-        epsilon_end (float): The final minimum value of epsilon after decaying is done
+        epsilon_end (float): The final minimum value of epsilon after decaying is done.
 
-        epsilon_decay_steps (int): Number of steps to decay epsilon over
+        epsilon_step (float): Reduce epsilon by this amount every step.
 
         target_update_every (int): Number of steps between updating target network
             parameters, i.e. resetting Q_hat to Q.
+
+        num_test_episodes (int): Number of episodes to test the deterministic
+            policy at the end of each epoch.
+
+        max_ep_len (int): Maximum length of trajectory / episode / rollout. (Imposed by
+           the environment.)
 
         record_video (bool): Record a video
 
@@ -149,7 +154,10 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     logger = EpochLogger(exp_name='dqn')
     logger.save_config(locals())
 
-    env = env_fn()
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+
+    env, test_env = env_fn(), env_fn()
 
     if record_video:
         env = Monitor(
@@ -195,7 +203,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         return loss_q, loss_info
 
     # Set up optimizer for Q-function
-    q_optimizer = torch.optim.RMSprop(ac.q.parameters(), lr=lr)
+    q_optimizer = torch.optim.Adam(ac.q.parameters(), lr=lr)
 
     # Set up model saving
     logger.setup_pytorch_saver(ac)
@@ -209,15 +217,24 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
         logger.store(LossQ=loss.item(), **loss_info)
 
-    def get_action(o):
-        return ac.act(torch.as_tensor(o, dtype=torch.float32))
+    def get_action(o, epsilon):
+        # greedy epsilon strategy
+        if np.random.sample() < epsilon:
+            a = env.action_space.sample()
+        else:
+            a = ac.act(torch.as_tensor(o, dtype=torch.float32))
+        return a
 
     def test_agent():
-        pass
+        for j in range(num_test_episodes):
+            o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
+            while not(d or (ep_len == max_ep_len)):
+                # Take deterministic actions at test time (noise_scale=0)
+                o, r, d, _ = test_env.step(get_action(o, 0))
+                ep_ret += r
+                ep_len += 1
+            logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
 
-    # The epsilon decay schedule
-    epsilons = np.linspace(epsilon_start, epsilon_end, epsilon_decay_steps)
-    
     # main loop: collect experience in env
 
     # Initialize experience replay buffer
@@ -225,28 +242,31 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
+    epsilon = epsilon_start
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     for t in range(total_steps):
-        # epsilon for this time step
-        epsilon = epsilons[min(t, epsilon_decay_steps-1)]
 
-        # Until start_steps have elapsed, randomly sample actions
-        # from a uniform distribution for better exploration.  Afterwards,
-        # follow an epsilon-greedy approach using the learned Q network.
+        if t > start_steps and epsilon > epsilon_end:
+            # linearly reduce epsilon
+            epsilon -= epsilon_step
+
         if t > start_steps:
             # epsilon greedy
-            if np.random.sample() < epsilon:
-                a = env.action_space.sample()
-            else:
-                a = get_action(o)
+            a = get_action(o, epsilon)
         else:
+            # randomly sample for better exploration before start_steps
             a = env.action_space.sample()
-            
+
         # Step the env
         o2, r, d, _ = env.step(a)
         ep_ret += r
         ep_len += 1
+
+        # Ignore the "done" signal if it comes from hitting the time
+        # horizon (that is, when it's an artificial terminal signal
+        # that isn't based on the agent's state)
+        d = False if ep_len==max_ep_len else d
         
         # Store transition to replay buffer
         replay_buffer.store(o, a, r, o2, d)
@@ -255,31 +275,40 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         o = o2
         
         # End of episode handling
-        if d:
+        if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
+            left_cnt, right_cnt = 0, 0
             o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
-        if t >= update_after and t % update_every == 0:
+        if t > update_after and t % update_every == 0:
             minibatch = replay_buffer.sample_batch(batch_size)
             update(data=minibatch)
 
         # Refresh target Q network
         if t % target_update_every == 0:
             target_q_network.load_state_dict(ac.q.state_dict())
+            for p in target_q_network.parameters():
+                p.requires_grad = False
 
         # End of epoch handling
-        if (t+1) % steps_per_epoch == 0:
+        if (t+1) % steps_per_epoch == 0 and (t+1) > start_steps:
             epoch = (t+1) // steps_per_epoch
+
+            print(f"epsilon: {epsilon}")
 
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
 
+            # Test the performance of the deterministic version of the agent.
+            test_agent()
+
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
             logger.log_tabular('EpLen', average_only=True)
+            logger.log_tabular('TestEpRet', with_min_and_max=True)
             logger.log_tabular('TotalEnvInteracts', t)
             logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
             logger.log_tabular('LossQ', average_only=True)
@@ -290,24 +319,44 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
 
 config_cartpole = dict(
-    replay_size = 500,
+    replay_size = 100000,
     seed = 0,
-    steps_per_epoch = 3000,
-    epochs = 5,
+    steps_per_epoch = 640,
+    epochs = 500,
     gamma = 0.99,
-    lr = 0.00025,
+    lr = 0.001,
     batch_size = 32,
-    start_steps = 100,
-    update_after = 50,
-    update_every = 5,
+    start_steps = 50000,
+    update_after = 10000,
+    update_every = 1,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
-    epsilon_decay_steps = 15,
-    target_update_every = 1000,
-    record_video = False,
-    record_video_every = 100,
-    save_freq = 50
+    epsilon_step = 1e-4,
+    target_update_every = 500,
+    record_video = True,
+    record_video_every = 2000,
+    save_freq = 100
 )
+
+# config_cartpole = dict(
+#     replay_size = 1000000,
+#     seed = 0,
+#     steps_per_epoch = 640,
+#     epochs = 2000,
+#     gamma = 0.99,
+#     lr = 0.00025,
+#     batch_size = 32,
+#     start_steps = 50,
+#     update_after = 50,
+#     update_every = 1,
+#     epsilon_start = 1.0,
+#     epsilon_end = 0.1,
+#     epsilon_decay_steps = 100000,
+#     target_update_every = 10000,
+#     record_video = False,
+#     record_video_every = 100,
+#     save_freq = 50
+# )
 
 if __name__ == '__main__':
     dqn(lambda : gym.make('CartPole-v1'), **config_cartpole)

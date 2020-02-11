@@ -5,7 +5,6 @@ https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/sac
 
 TODOs:
 - double check Monitor wrapper params (resume=True or False?)
-- use more realistic hyperparameters, do rewards improve per episode?
 - Atari environment-specific preprocessing for images, skip frames, concat inputs
 
 """
@@ -15,6 +14,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 import gym
 from gym.wrappers import Monitor
@@ -194,12 +194,13 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             backup = r + (1 - d) * gamma * q_target
             
         # MSE loss against Bellman backup
-        loss_q = ((q - backup)**2).mean()
+        # loss_q = ((q - backup)**2).mean()
+        loss_q = F.smooth_l1_loss(q[:, 0], backup).mean()
         # TODO: clip Bellman error b/w -1 and 1
 
         # Useful info for logging
         loss_info = dict(QVals=q.detach().numpy())
-        
+
         return loss_q, loss_info
 
     # Set up optimizer for Q-function
@@ -319,21 +320,21 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
 
 config_cartpole = dict(
-    replay_size = 100000,
+    replay_size = 100_000,
     seed = 0,
     steps_per_epoch = 640,
     epochs = 500,
     gamma = 0.99,
-    lr = 0.001,
-    batch_size = 32,
-    start_steps = 50000,
-    update_after = 10000,
+    lr = 0.00025,
+    batch_size = 64,
+    start_steps = 1000,
+    update_after = 1000,
     update_every = 1,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
-    epsilon_step = 1e-4,
-    target_update_every = 500,
-    record_video = True,
+    epsilon_step = 4e-5,
+    target_update_every = 2000,
+    record_video = False,
     record_video_every = 2000,
     save_freq = 100
 )

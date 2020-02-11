@@ -7,6 +7,14 @@ Mnih, et al. Nature 2015
 
 ## Set up virtual environment
 
+Most of the deep learning framework and scientific computing libraries
+are already specified as dependencies in Spinning Up, so the
+environment files here (`Pipfile` and `environment.yml`) look
+lightweight because those deps are buried in the installation of
+Spinning Up.
+
+We use Spinning up's logger utilities.
+
 ### pre-reqs
 - `ffmpeg` for recording videos using the `Monitor` OpenAI gym wrapper: `brew install ffmpeg`
 - `openmpi` for Spinning Up: `brew install openmpi`
@@ -26,6 +34,9 @@ conda activate dqn
 conda deactivate
 ```
 
+Note, conda installation fails to meet spinning up's tensorflow requirement
+(>=1.8,<2.0) for python 3.7, so we specify python 3.6 in `environment.yml`.
+
 ### pipenv
 The environment is specified in `Pipfile`.
 ```shell
@@ -38,13 +49,6 @@ pipenv shell
 # Deactivate the env
 exit
 ```
-### [Required] Additional installation
-
-With either your pyenv or conda environment activated, follow
-[instructions](https://spinningup.openai.com/en/latest/user/installation.html#installing-spinning-up)
-for installing spinning up in RL (sadly not available as a package on pypi or conda).
-
-We use Spinning up's logger utilities.
 
 
 ## Run

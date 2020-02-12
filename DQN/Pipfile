@@ -7,6 +7,7 @@ verify_ssl = true
 [packages]
 jupyter = "*"
 spinup = {git = "https://github.com/openai/spinningup.git", ref = "master", editable = true}
+wandb = "*"
 
 [requires]
 python_version = "3.7"

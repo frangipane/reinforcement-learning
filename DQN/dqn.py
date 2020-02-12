@@ -27,7 +27,6 @@ import wandb
 from nnetworks import *
 
 
-wandb.init(project="dqn")
 
 #============================================================================
 
@@ -318,12 +317,13 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
+            wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
     env.close()
 
 
-config_cartpole = dict(
+wandb_config = dict(
     replay_size = 100_000,
     seed = 0,
     steps_per_epoch = 640,
@@ -337,7 +337,10 @@ config_cartpole = dict(
     epsilon_start = 1.0,
     epsilon_end = 0.1,
     epsilon_step = 4e-5,
-    target_update_every = 2000,
+    target_update_every = 3000
+)
+
+addl_config = dict(
     record_video = False,
     record_video_every = 2000,
     save_freq = 100
@@ -364,4 +367,5 @@ config_cartpole = dict(
 # )
 
 if __name__ == '__main__':
-    dqn(lambda : gym.make('CartPole-v1'), **config_cartpole)
+    wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
+    dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)

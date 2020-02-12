@@ -1,13 +1,8 @@
 name: dqn
 channels:
-  - pytorch
 dependencies:
   - python=3.6
-  - pytorch
-  - torchvision
-  - numpy
-  - jupyter
-  - matplotlib
   - pip
   - pip:
-    - gym
+    - -e git+https://github.com/openai/spinningup.git@master#egg=spinup
+    - wandb

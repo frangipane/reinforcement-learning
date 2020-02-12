@@ -22,8 +22,12 @@ from gym.wrappers import Monitor
 # e.g. on macOS: brew install ffmpeg
 
 from spinup.utils.logx import EpochLogger
+import wandb
 
 from nnetworks import *
+
+
+wandb.init(project="dqn")
 
 #============================================================================
 
@@ -151,7 +155,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         save_freq (int): How often (in terms of gap between epochs) to save
             the current model (value function).
     """
-    logger = EpochLogger(exp_name='dqn')
+    logger = EpochLogger(exp_name='dqn', output_dir=wandb.run.dir)
     logger.save_config(locals())
 
     torch.manual_seed(seed)
@@ -315,7 +319,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.dump_tabular()
-            
+
     env.close()
 
 

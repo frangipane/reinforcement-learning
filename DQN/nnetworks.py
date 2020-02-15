@@ -25,13 +25,13 @@ class MLPQFunction(nn.Module):
 
     def forward(self, obs):
         q = self.q(obs)
-        return torch.squeeze(q, -1) # Critical to ensure q has right shape.
+        return torch.squeeze(q, -1)  # Critical to ensure q has right shape.
 
 
 # TODO: Consider removing this class entirely and handling `act` in dqn logic instead.
 class MLPCritic(nn.Module):
-    def __init__(self, observation_space, action_space, 
-                 hidden_sizes=(256,256),
+    def __init__(self, observation_space, action_space,
+                 hidden_sizes=(256, 256),
                  activation=nn.ReLU):
         super().__init__()
         obs_dim = observation_space.shape[0]
@@ -43,7 +43,7 @@ class MLPCritic(nn.Module):
     def act(self, obs):
         """Return an action (an integer)"""
         with torch.no_grad():
-            a = torch.argmax(self.q(obs)).numpy()
+            a = torch.argmax(self.q(obs)).cpu().numpy()
             return a
 
 
@@ -121,6 +121,5 @@ class CNNCritic(nn.Module):
         """Return an action (an integer)"""
         with torch.no_grad():
             obs = torch.unsqueeze(obs, 0)
-            a = np.argmax(self.q(obs)).numpy()
+            a = torch.argmax(self.q(obs)).cpu().numpy()
             return a
-        

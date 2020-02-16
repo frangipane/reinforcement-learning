@@ -25,7 +25,13 @@ from spinup.utils.logx import EpochLogger
 import wandb
 
 from nnetworks import *
+from atari_wrappers import make_atari, wrap_deepmind
 
+
+# if gpu is to be used
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+print("\n ******** Number of GPUs:", torch.cuda.device_count())
 
 
 #============================================================================
@@ -68,8 +74,9 @@ class ReplayBuffer:
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: torch.as_tensor(v, dtype=torch.int32) if k == 'act'
-                else torch.as_tensor(v, dtype=torch.float32) for k,v in batch.items()}
+        return {k: torch.as_tensor(v, dtype=torch.int32, device=device) if k == 'act'
+                else torch.as_tensor(v, dtype=torch.float32, device=device)
+                for k,v in batch.items()}
 
 
 def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
@@ -177,6 +184,13 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     # Set target Q-network parameters theta_tar = theta
     target_q_network = deepcopy(ac.q)
 
+    if torch.cuda.device_count() > 1:
+        ac.q = nn.DataParallel(ac.q)
+        target_q_network = nn.DataParallel(target_q_network)
+
+    ac.to(device)
+    target_q_network.to(device)
+
     # Freeze target network w.r.t. optimizers
     for p in target_q_network.parameters():
         p.requires_grad = False    
@@ -193,7 +207,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         # Bellman backup for Q function
         with torch.no_grad():
             # Targets come from frozen target Q-network
-            q_target = torch.max(target_q_network.q(o2), dim=1).values
+            q_target = torch.max(target_q_network(o2), dim=1).values
             backup = r + (1 - d) * gamma * q_target
             
         # MSE loss against Bellman backup
@@ -202,7 +216,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         # TODO: clip Bellman error b/w -1 and 1
 
         # Useful info for logging
-        loss_info = dict(QVals=q.detach().numpy())
+        loss_info = dict(QVals=q.detach().cpu().numpy())
 
         return loss_q, loss_info
 
@@ -226,7 +240,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         if np.random.sample() < epsilon:
             a = env.action_space.sample()
         else:
-            a = ac.act(torch.as_tensor(o, dtype=torch.float32))
+            a = ac.act(torch.as_tensor(o, dtype=torch.float32, device=device))
         return a
 
     def test_agent():
@@ -317,55 +331,91 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
+            logger.log_tabular('Epsilon', epsilon)
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
     env.close()
 
 
+# =========== BreakoutNoFrameskip-v0 hyperparameters ===========
+# wandb_config = dict(
+#     replay_size = 20_000,
+#     seed = 0,
+#     steps_per_epoch = 640,
+#     #epochs = 100,
+#     epochs = int(1e7 / 640),
+#     gamma = 0.99,
+#     lr = 0.00025,
+#     batch_size = 64,
+#     start_steps = 100,
+#     update_after = 100,
+#     update_every = 4,
+#     epsilon_start = 1.0,
+#     epsilon_end = 0.1,
+#     epsilon_step = 4e-5,
+#     target_update_every = 10_000,
+#     max_ep_len = 27000
+# )
+
 wandb_config = dict(
-    replay_size = 100_000,
+    replay_size = 20_000,
     seed = 0,
-    steps_per_epoch = 640,
-    epochs = 500,
+    steps_per_epoch = 80*32,
+    #epochs = 100,
+    epochs = int(1e7 / 640),
     gamma = 0.99,
     lr = 0.00025,
     batch_size = 64,
-    start_steps = 1000,
-    update_after = 1000,
-    update_every = 1,
+    start_steps = 10_000,
+    update_after = 10_000,
+    update_every = 4,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
     epsilon_step = 4e-5,
-    target_update_every = 3000
+    target_update_every = 10_000,
+    max_ep_len = 27000
 )
 
 addl_config = dict(
+    actor_critic=CNNCritic,
     record_video = False,
     record_video_every = 2000,
     save_freq = 100
 )
 
-# config_cartpole = dict(
-#     replay_size = 1000000,
+# =========== CartPole-v1 hyperparameters ===========
+# wandb_config = dict(
+#     replay_size = 100_000,
 #     seed = 0,
 #     steps_per_epoch = 640,
-#     epochs = 2000,
+#     epochs = 500,
 #     gamma = 0.99,
 #     lr = 0.00025,
-#     batch_size = 32,
-#     start_steps = 50,
-#     update_after = 50,
+#     batch_size = 64,
+#     start_steps = 1000,
+#     update_after = 1000,
 #     update_every = 1,
 #     epsilon_start = 1.0,
 #     epsilon_end = 0.1,
-#     epsilon_decay_steps = 100000,
-#     target_update_every = 10000,
-#     record_video = False,
-#     record_video_every = 100,
-#     save_freq = 50
+#     epsilon_step = 4e-5,
+#     target_update_every = 3000
 # )
 
+# addl_config = dict(
+#     actor_critic=MLPCritic,
+#     record_video = False,
+#     record_video_every = 2000,
+#     save_freq = 100
+# )
+
+
+
 if __name__ == '__main__':
-    wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
-    dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
+    #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
+    #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
+
+    wandb.init(project="dqn", config=wandb_config, tags=['BreakoutNoFrameskip-v4'])
+    env = make_atari('BreakoutNoFrameskip-v4')
+    env = wrap_deepmind(env, frame_stack=True, scale=False)
+    dqn(lambda: env, **wandb_config, **addl_config)

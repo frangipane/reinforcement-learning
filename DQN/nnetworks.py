@@ -25,13 +25,13 @@ class MLPQFunction(nn.Module):
 
     def forward(self, obs):
         q = self.q(obs)
-        return torch.squeeze(q, -1) # Critical to ensure q has right shape.
+        return torch.squeeze(q, -1)  # Critical to ensure q has right shape.
 
 
 # TODO: Consider removing this class entirely and handling `act` in dqn logic instead.
 class MLPCritic(nn.Module):
-    def __init__(self, observation_space, action_space, 
-                 hidden_sizes=(256,256),
+    def __init__(self, observation_space, action_space,
+                 hidden_sizes=(256, 256),
                  activation=nn.ReLU):
         super().__init__()
         obs_dim = observation_space.shape[0]
@@ -43,7 +43,7 @@ class MLPCritic(nn.Module):
     def act(self, obs):
         """Return an action (an integer)"""
         with torch.no_grad():
-            a = torch.argmax(self.q(obs)).numpy()
+            a = torch.argmax(self.q(obs)).cpu().numpy()
             return a
 
 
@@ -67,19 +67,39 @@ class CNNQFunction(nn.Module):
     ----
     nA: number of actions
     """
-    def __init__(self, act_dim):
+    def __init__(self, act_dim, w=84, h=84, num_channels=4):
         super().__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=8, stride=4)
+        self.conv1 = nn.Conv2d(num_channels, 32, kernel_size=8, stride=4)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
-        self.fc1 = nn.Linear(64, 512)
+
+        # Number of Linear input connections depends on output of conv2d layers
+        # and therefore the input image size, so compute it.
+        def conv2d_size_out(size, kernel_size, stride):
+            return (size - (kernel_size - 1) - 1) // stride  + 1
+        self._convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, kernel_size=8, stride=4),
+                                                      kernel_size=4,
+                                                      stride=2),
+                                      kernel_size=3,
+                                      stride=1)
+        self._convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, kernel_size=8, stride=4),
+                                                      kernel_size=4,
+                                                      stride=2),
+                                      kernel_size=3,
+                                      stride=1)
+        linear_input_size = self._convw * self._convh * 64  # 7*7*64 for Atari
+
+        self.fc1 = nn.Linear(linear_input_size, 512)
         self.fc2 = nn.Linear(512, act_dim)
 
     def forward(self, obs):
-        x = obs.view(-1, 84, 84, 4)
+        # Input has shape (batch size, width, height, num channels),
+        # want shape (batch size, num channels, width, height).
+        x = obs.permute(0, 3, 1, 2)
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
+        x = x.view(-1, 64 * self._convw * self._convh)
         x = F.relu(self.fc1(x))
         q = self.fc2(x)
         return torch.squeeze(q, -1)  # Ensure q has right shape.
@@ -88,16 +108,18 @@ class CNNQFunction(nn.Module):
 class CNNCritic(nn.Module):
     def __init__(self, observation_space, action_space):
         super().__init__()
-        # TODO: do I need observation_space?
-        obs_dim = observation_space.shape[0]
+        width = observation_space.shape[0]
+        height = observation_space.shape[1]
+        num_channels = observation_space.shape[2]
+        # obs_num_channels = 4 for atari using frame_stack=True
         act_dim = action_space.n  # assumes Discrete space
 
         # build value function
-        self.q = CNNQFunction(act_dim)
+        self.q = CNNQFunction(act_dim, width, height, num_channels)
 
     def act(self, obs):
         """Return an action (an integer)"""
         with torch.no_grad():
-            a = np.argmax(self.q(obs)).numpy()
+            obs = torch.unsqueeze(obs, 0)
+            a = torch.argmax(self.q(obs)).cpu().numpy()
             return a
-        

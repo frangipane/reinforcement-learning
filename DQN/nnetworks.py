@@ -25,7 +25,7 @@ class MLPQFunction(nn.Module):
 
     def forward(self, obs):
         q = self.q(obs)
-        return torch.squeeze(q, -1)  # Critical to ensure q has right shape.
+        return q
 
 
 # TODO: Consider removing this class entirely and handling `act` in dqn logic instead.
@@ -77,17 +77,17 @@ class CNNQFunction(nn.Module):
         # and therefore the input image size, so compute it.
         def conv2d_size_out(size, kernel_size, stride):
             return (size - (kernel_size - 1) - 1) // stride  + 1
-        self._convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, kernel_size=8, stride=4),
-                                                      kernel_size=4,
-                                                      stride=2),
-                                      kernel_size=3,
-                                      stride=1)
-        self._convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, kernel_size=8, stride=4),
-                                                      kernel_size=4,
-                                                      stride=2),
-                                      kernel_size=3,
-                                      stride=1)
-        linear_input_size = self._convw * self._convh * 64  # 7*7*64 for Atari
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, kernel_size=8, stride=4),
+                                                kernel_size=4,
+                                                stride=2),
+                                kernel_size=3,
+                                stride=1)
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, kernel_size=8, stride=4),
+                                                kernel_size=4,
+                                                stride=2),
+                                kernel_size=3,
+                                stride=1)
+        linear_input_size = convw * convh * 64  # 7*7*64 for Atari
 
         self.fc1 = nn.Linear(linear_input_size, 512)
         self.fc2 = nn.Linear(512, act_dim)
@@ -99,10 +99,10 @@ class CNNQFunction(nn.Module):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = x.view(-1, 64 * self._convw * self._convh)
+        x = x.view(x.shape[0], -1)  # flattens non-batch dimensions, so 64*conv*convw
         x = F.relu(self.fc1(x))
         q = self.fc2(x)
-        return torch.squeeze(q, -1)  # Ensure q has right shape.
+        return q
 
 
 class CNNCritic(nn.Module):

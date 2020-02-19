@@ -2,11 +2,6 @@
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ddpg
 and
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/sac
-
-TODOs:
-- double check Monitor wrapper params (resume=True or False?)
-- Atari environment-specific preprocessing for images, skip frames, concat inputs
-
 """
 import time
 from copy import deepcopy
@@ -169,13 +164,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
     env, test_env = env_fn(), env_fn()
 
-    if record_video:
-        env = Monitor(
-            env,
-            directory="/tmp/gym-results",
-            resume=True,
-            video_callable=lambda count: count % record_video_every == 0
-        )
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n  # assumes Discrete space
 
@@ -253,6 +241,9 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     epsilon = epsilon_start
     o, ep_ret, ep_len = env.reset(), 0, 0
 
+    episode_rewards_start_idx_for_epoch = 0
+    episode_rewards_end_idx_for_epoch = 0
+
     for t in range(total_steps):
 
         if t > start_steps and epsilon > epsilon_end:
@@ -285,7 +276,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         # End of episode handling
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
-            left_cnt, right_cnt = 0, 0
             o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
@@ -309,6 +299,15 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
 
+            # Assumes env has been wrapped by Monitor.
+            # attributes (type list) from Monitor
+            episode_rewards_start_idx_for_epoch = episode_rewards_end_idx_for_epoch
+            episode_rewards_end_idx_for_epoch = len(env.get_episode_rewards())
+            episode_rewards_slice = slice(episode_rewards_start_idx_for_epoch,
+                                          episode_rewards_end_idx_for_epoch)
+            raw_episode_rewards = env.get_episode_rewards()[episode_rewards_slice]
+            raw_episode_lengths = env.get_episode_lengths()[episode_rewards_slice]
+
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
@@ -318,6 +317,13 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
+            logger.log_tabular('EpisodeId', env.episode_id)
+            logger.log_tabular('AvgRawEpRewards', np.mean(raw_episode_rewards))
+            logger.log_tabular('MaxRawEpRewards', np.max(raw_episode_rewards))
+            logger.log_tabular('MinRawEpRewards', np.min(raw_episode_rewards))
+            logger.log_tabular('AvgRawEpLen', np.mean(raw_episode_lengths))
+            logger.log_tabular('MaxRawEpLen', np.max(raw_episode_lengths))
+            logger.log_tabular('MinRawEpLen', np.min(raw_episode_lengths))
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
@@ -400,8 +406,13 @@ addl_config = dict(
 if __name__ == '__main__':
     #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
     #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
-
     wandb.init(project="dqn", config=wandb_config, tags=['BreakoutNoFrameskip-v4'])
     env = make_atari('BreakoutNoFrameskip-v4')
+    env = Monitor(env,
+                  directory=wandb.run.dir,
+                  force=True,
+                  resume=False,
+                  video_callable=False)
+
     env = wrap_deepmind(env, frame_stack=True, scale=False)
     dqn(lambda: env, **wandb_config, **addl_config)

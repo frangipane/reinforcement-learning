@@ -331,6 +331,8 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
 
 # =========== BreakoutNoFrameskip-v0 hyperparameters ===========
+
+# for testing
 # wandb_config = dict(
 #     replay_size = 20_000,
 #     seed = 0,
@@ -351,20 +353,19 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 # )
 
 wandb_config = dict(
-    replay_size = 20_000,
+    replay_size = 1_000_000,
     seed = 0,
     steps_per_epoch = 80*32,
-    #epochs = 100,
-    epochs = int(1e7 / 640),
+    epochs = 2000,
     gamma = 0.99,
     lr = 0.00025,
-    batch_size = 64,
-    start_steps = 10_000,
-    update_after = 10_000,
+    batch_size = 32,
+    start_steps = 50_000,
+    update_after = 50_000,
     update_every = 4,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
-    epsilon_step = 4e-5,
+    epsilon_step = 1e-7,
     target_update_every = 10_000,
     max_ep_len = 27000
 )
@@ -373,7 +374,7 @@ addl_config = dict(
     actor_critic=CNNCritic,
     record_video = False,
     record_video_every = 2000,
-    save_freq = 100
+    save_freq = 150
 )
 
 # =========== CartPole-v1 hyperparameters ===========

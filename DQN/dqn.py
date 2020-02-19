@@ -2,11 +2,6 @@
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ddpg
 and
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/sac
-
-TODOs:
-- double check Monitor wrapper params (resume=True or False?)
-- Atari environment-specific preprocessing for images, skip frames, concat inputs
-
 """
 import time
 from copy import deepcopy
@@ -169,13 +164,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
     env, test_env = env_fn(), env_fn()
 
-    if record_video:
-        env = Monitor(
-            env,
-            directory="/tmp/gym-results",
-            resume=True,
-            video_callable=lambda count: count % record_video_every == 0
-        )
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n  # assumes Discrete space
 
@@ -243,16 +231,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             a = ac.act(torch.as_tensor(o, dtype=torch.float32, device=device))
         return a
 
-    def test_agent():
-        for j in range(num_test_episodes):
-            o, d, ep_ret, ep_len = test_env.reset(), False, 0, 0
-            while not(d or (ep_len == max_ep_len)):
-                # Take deterministic actions at test time (noise_scale=0)
-                o, r, d, _ = test_env.step(get_action(o, 0))
-                ep_ret += r
-                ep_len += 1
-            logger.store(TestEpRet=ep_ret, TestEpLen=ep_len)
-
     # main loop: collect experience in env
 
     # Initialize experience replay buffer
@@ -262,6 +240,9 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     start_time = time.time()
     epsilon = epsilon_start
     o, ep_ret, ep_len = env.reset(), 0, 0
+
+    episode_rewards_start_idx_for_epoch = 0
+    episode_rewards_end_idx_for_epoch = 0
 
     for t in range(total_steps):
 
@@ -295,7 +276,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         # End of episode handling
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
-            left_cnt, right_cnt = 0, 0
             o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
@@ -319,19 +299,31 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
 
-            # Test the performance of the deterministic version of the agent.
-            test_agent()
+            # Assumes env has been wrapped by Monitor.
+            # attributes (type list) from Monitor
+            episode_rewards_start_idx_for_epoch = episode_rewards_end_idx_for_epoch
+            episode_rewards_end_idx_for_epoch = len(env.get_episode_rewards())
+            episode_rewards_slice = slice(episode_rewards_start_idx_for_epoch,
+                                          episode_rewards_end_idx_for_epoch)
+            raw_episode_rewards = env.get_episode_rewards()[episode_rewards_slice]
+            raw_episode_lengths = env.get_episode_lengths()[episode_rewards_slice]
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
             logger.log_tabular('EpLen', average_only=True)
-            logger.log_tabular('TestEpRet', with_min_and_max=True)
             logger.log_tabular('TotalEnvInteracts', t)
             logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
+            logger.log_tabular('EpisodeId', env.episode_id)
+            logger.log_tabular('AvgRawEpRewards', np.mean(raw_episode_rewards))
+            logger.log_tabular('MaxRawEpRewards', np.max(raw_episode_rewards))
+            logger.log_tabular('MinRawEpRewards', np.min(raw_episode_rewards))
+            logger.log_tabular('AvgRawEpLen', np.mean(raw_episode_lengths))
+            logger.log_tabular('MaxRawEpLen', np.max(raw_episode_lengths))
+            logger.log_tabular('MinRawEpLen', np.min(raw_episode_lengths))
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
@@ -339,6 +331,8 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
 
 # =========== BreakoutNoFrameskip-v0 hyperparameters ===========
+
+# for testing
 # wandb_config = dict(
 #     replay_size = 20_000,
 #     seed = 0,
@@ -359,20 +353,19 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 # )
 
 wandb_config = dict(
-    replay_size = 20_000,
+    replay_size = 1_000_000,
     seed = 0,
     steps_per_epoch = 80*32,
-    #epochs = 100,
-    epochs = int(1e7 / 640),
+    epochs = 2000,
     gamma = 0.99,
     lr = 0.00025,
-    batch_size = 64,
-    start_steps = 10_000,
-    update_after = 10_000,
+    batch_size = 32,
+    start_steps = 50_000,
+    update_after = 50_000,
     update_every = 4,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
-    epsilon_step = 4e-5,
+    epsilon_step = 1e-7,
     target_update_every = 10_000,
     max_ep_len = 27000
 )
@@ -381,7 +374,7 @@ addl_config = dict(
     actor_critic=CNNCritic,
     record_video = False,
     record_video_every = 2000,
-    save_freq = 100
+    save_freq = 150
 )
 
 # =========== CartPole-v1 hyperparameters ===========
@@ -414,8 +407,13 @@ addl_config = dict(
 if __name__ == '__main__':
     #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
     #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
-
     wandb.init(project="dqn", config=wandb_config, tags=['BreakoutNoFrameskip-v4'])
     env = make_atari('BreakoutNoFrameskip-v4')
+    env = Monitor(env,
+                  directory=wandb.run.dir,
+                  force=True,
+                  resume=False,
+                  video_callable=False)
+
     env = wrap_deepmind(env, frame_stack=True, scale=False)
     dqn(lambda: env, **wandb_config, **addl_config)

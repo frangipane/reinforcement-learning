@@ -74,7 +74,7 @@ class ReplayBuffer:
                 for k,v in batch.items()}
 
 
-def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
+def dqn(env, actor_critic=MLPCritic, replay_size=500,
         seed=0, steps_per_epoch=3000, epochs=5,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
         update_after=50, update_every=5,
@@ -84,8 +84,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
         record_video_every=100, save_freq=50):
     """
     Args:
-        env_fn : A function which creates a copy of the environment.
-            The environment must satisfy the OpenAI Gym API.
+        env : An environment that satisfies the OpenAI Gym API.
 
         actor_critic: The constructor method for a PyTorch Module with an ``act``
             method and a ``q`` module.
@@ -161,8 +160,6 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
     torch.manual_seed(seed)
     np.random.seed(seed)
-
-    env, test_env = env_fn(), env_fn()
 
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n  # assumes Discrete space
@@ -330,7 +327,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     env.close()
 
 
-# =========== BreakoutNoFrameskip-v0 hyperparameters ===========
+# =========== BreakoutNoFrameskip-v4 hyperparameters ===========
 
 # for testing
 # wandb_config = dict(
@@ -407,7 +404,11 @@ addl_config = dict(
 if __name__ == '__main__':
     #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
     #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
-    wandb.init(project="dqn", config=wandb_config, tags=['BreakoutNoFrameskip-v4'])
+
+    wandb.init(project="dqn",
+               config=wandb_config,
+               tags=['BreakoutNoFrameskip-v4'])
+
     env = make_atari('BreakoutNoFrameskip-v4')
     env = Monitor(env,
                   directory=wandb.run.dir,
@@ -416,4 +417,4 @@ if __name__ == '__main__':
                   video_callable=False)
 
     env = wrap_deepmind(env, frame_stack=True, scale=False)
-    dqn(lambda: env, **wandb_config, **addl_config)
+    dqn(env, **wandb_config, **addl_config)

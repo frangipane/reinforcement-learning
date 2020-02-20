@@ -365,7 +365,7 @@ wandb_config = dict(
     update_every = 4,
     epsilon_start = 1.0,
     epsilon_end = 0.1,
-    epsilon_step = 1e-7,
+    epsilon_step = 1e-6,
     target_update_every = 10_000,
     max_ep_len = 27000
 )

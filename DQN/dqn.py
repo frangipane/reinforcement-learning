@@ -74,18 +74,19 @@ class ReplayBuffer:
                 for k,v in batch.items()}
 
 
-def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
+def dqn(env, actor_critic=MLPCritic, replay_size=500,
         seed=0, steps_per_epoch=3000, epochs=5,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
         update_after=50, update_every=5,
         epsilon_start=1.0, epsilon_end=0.1, epsilon_step=1e-4,
         target_update_every=1000, num_test_episodes=10, max_ep_len=200,
         record_video=False,
-        record_video_every=100, save_freq=50):
+        record_video_every=100, save_freq=50,
+        wandb_model_name=None,
+        wandb_restore_run_path=None):
     """
     Args:
-        env_fn : A function which creates a copy of the environment.
-            The environment must satisfy the OpenAI Gym API.
+        env : An environment that satisfies the OpenAI Gym API.
 
         actor_critic: The constructor method for a PyTorch Module with an ``act``
             method and a ``q`` module.
@@ -155,6 +156,12 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 
         save_freq (int): How often (in terms of gap between epochs) to save
             the current model (value function).
+
+        wandb_model_name (str): (optional) if not None, use a pretrained serialized torch
+            model stored in wandb
+
+        wandb_restore_run_path (str): (optional) if wandb_model_name is specified, then
+            this should specify path e.g. '$USER_NAME/$PROJECT_NAME/$RUN_ID'
     """
     logger = EpochLogger(exp_name='dqn', output_dir=wandb.run.dir)
     logger.save_config(locals())
@@ -162,17 +169,26 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     torch.manual_seed(seed)
     np.random.seed(seed)
 
-    env, test_env = env_fn(), env_fn()
-
     obs_dim = env.observation_space.shape
     act_dim = env.action_space.n  # assumes Discrete space
 
-    # Create critic module and network
-    ac = actor_critic(env.observation_space, env.action_space)
+    if wandb_model_name is not None:
+        # note, we can't use load_state_dict.  The entire model
+        # was serialized by EpochLogger's save_state rather
+        # than just its weights
+        assert wandb_restore_run_path is not None
+        ac = torch.load(wandb.restore(wandb_model_name, run_path=wandb_restore_run_path).name,
+                        map_location=device)
+    else:
+        # Create critic module and network
+        ac = actor_critic(env.observation_space, env.action_space)
+
     # Set target Q-network parameters theta_tar = theta
     target_q_network = deepcopy(ac.q)
 
-    if torch.cuda.device_count() > 1:
+    if torch.cuda.device_count() > 1 and wandb_model_name is None:
+        # hack: last post in this thread https://discuss.pytorch.org/t/bug-in-dataparallel-only-works-if-the-dataset-device-is-cuda-0/28634/24
+        # advises skipping DataParallel on a pretrained model
         ac.q = nn.DataParallel(ac.q)
         target_q_network = nn.DataParallel(target_q_network)
 
@@ -290,7 +306,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
                 p.requires_grad = False
 
         # End of epoch handling
-        if (t+1) % steps_per_epoch == 0 and (t+1) > start_steps:
+        if (t+1) % steps_per_epoch == 0 and (t+1) > start_steps and (t+1) > update_after:
             epoch = (t+1) // steps_per_epoch
 
             print(f"epsilon: {epsilon}")
@@ -313,7 +329,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period < epoch period
+            logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period > epoch period
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
@@ -330,7 +346,7 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
     env.close()
 
 
-# =========== BreakoutNoFrameskip-v0 hyperparameters ===========
+# =========== BreakoutNoFrameskip-v4 hyperparameters ===========
 
 # for testing
 # wandb_config = dict(
@@ -352,6 +368,33 @@ def dqn(env_fn, actor_critic=MLPCritic, replay_size=500,
 #     max_ep_len = 27000
 # )
 
+# wandb_config = dict(
+#     replay_size = 1_000_000,
+#     seed = 0,
+#     steps_per_epoch = 80*32,
+#     epochs = 2000,
+#     gamma = 0.99,
+#     lr = 0.00025,
+#     batch_size = 32,
+#     start_steps = 50_000,
+#     update_after = 50_000,
+#     update_every = 4,
+#     epsilon_start = 1.0,
+#     epsilon_end = 0.1,
+#     epsilon_step = 1e-6,
+#     target_update_every = 10_000,
+#     max_ep_len = 27000
+# )
+
+# addl_config = dict(
+#     actor_critic=CNNCritic,
+#     record_video = False,
+#     record_video_every = 2000,
+#     save_freq = 150
+# )
+
+
+### Use pre-trained model
 wandb_config = dict(
     replay_size = 1_000_000,
     seed = 0,
@@ -360,22 +403,25 @@ wandb_config = dict(
     gamma = 0.99,
     lr = 0.00025,
     batch_size = 32,
-    start_steps = 50_000,
+    start_steps = 0,
     update_after = 50_000,
     update_every = 4,
-    epsilon_start = 1.0,
+    epsilon_start = 0.4933,
     epsilon_end = 0.1,
-    epsilon_step = 1e-7,
+    epsilon_step = 1e-6,
     target_update_every = 10_000,
-    max_ep_len = 27000
+    max_ep_len = 27000,
+    wandb_model_name = "pyt_save/model.pt",
+    wandb_restore_run_path = "frangipane/dqn/nlcbd9ns"  # run_path pointing to a serialized torch model    
 )
 
 addl_config = dict(
     actor_critic=CNNCritic,
     record_video = False,
     record_video_every = 2000,
-    save_freq = 150
+    save_freq = 150,
 )
+
 
 # =========== CartPole-v1 hyperparameters ===========
 # wandb_config = dict(
@@ -407,7 +453,11 @@ addl_config = dict(
 if __name__ == '__main__':
     #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
     #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
-    wandb.init(project="dqn", config=wandb_config, tags=['BreakoutNoFrameskip-v4'])
+
+    wandb.init(project="dqn",
+               config=wandb_config,
+               tags=['BreakoutNoFrameskip-v4', 'from_pretrained'])
+
     env = make_atari('BreakoutNoFrameskip-v4')
     env = Monitor(env,
                   directory=wandb.run.dir,
@@ -416,4 +466,4 @@ if __name__ == '__main__':
                   video_callable=False)
 
     env = wrap_deepmind(env, frame_stack=True, scale=False)
-    dqn(lambda: env, **wandb_config, **addl_config)
+    dqn(env, **wandb_config, **addl_config)

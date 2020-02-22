@@ -57,6 +57,26 @@ exit
 - `python dqn.py`
 
 
+## Play a gym game as a human
+
+You'll need to install `pygame` as an extra dependency.  With the environment activated: `pip install pygame`.
+
+To play Breakout:
+```python
+import gym
+from gym.utils.play import play
+
+env = gym.make("BreakoutNoFrameskip-v4")
+play(env, zoom=4)
+```
+
+This will pop up a window.  To start the game, hit *space bar*.  To
+move left: `a`, to move right: `d`.
+
+
+![DQN play atari breakout](atari_breakout.gif)
+
+
 ## Key concepts from DQN
 
 First successful usage of deep neural network as value function

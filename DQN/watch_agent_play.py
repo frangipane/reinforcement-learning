@@ -34,6 +34,7 @@ def play_game(env,
     ac_saved = torch.load(**torch_load_kwargs)
     ac_saved = ac_saved.to(device)
     ac.q.load_state_dict(ac_saved.q.module.state_dict())
+    ac.q.to(device)
 
     avg_ret = 0
     avg_raw_ret = 0

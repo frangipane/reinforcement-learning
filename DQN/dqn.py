@@ -78,7 +78,7 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
         seed=0, steps_per_epoch=3000, epochs=5,
         gamma=0.99, lr=0.00025, batch_size=32, start_steps=100, 
         update_after=50, update_every=5,
-        epsilon_start=1.0, epsilon_end=0.1, epsilon_step=1e-4,
+        epsilon_start=1.0, epsilon_end=0.1, epsilon_decay_steps=1e6,
         target_update_every=1000, num_test_episodes=10, max_ep_len=200,
         record_video=False,
         record_video_every=100, save_freq=50,
@@ -135,11 +135,12 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
             between gradient descent updates.
 
         epsilon_start (float): Chance to sample a random action when taking an action.
-          Epsilon is decayed over time and this is the start value
+            Epsilon is decayed over time and this is the start value
 
         epsilon_end (float): The final minimum value of epsilon after decaying is done.
 
-        epsilon_step (float): Reduce epsilon by this amount every step.
+        epsilon_decay_steps (int): Number of steps over which to linearly decrement from
+            epsilon_start to epsilon_end.
 
         target_update_every (int): Number of steps between updating target network
             parameters, i.e. resetting Q_hat to Q.
@@ -254,6 +255,7 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
+    epsilon_decrement = (epsilon_start - epsilon_end)/epsilon_decay_steps
     epsilon = epsilon_start
     o, ep_ret, ep_len = env.reset(), 0, 0
 
@@ -264,7 +266,7 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 
         if t > start_steps and epsilon > epsilon_end:
             # linearly reduce epsilon
-            epsilon -= epsilon_step
+            epsilon -= epsilon_decrement
 
         if t > start_steps:
             # epsilon greedy
@@ -363,11 +365,31 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 #     update_every = 4,
 #     epsilon_start = 1.0,
 #     epsilon_end = 0.1,
-#     epsilon_step = 4e-5,
+#     epsilon_decay_steps = 1_000_000,
 #     target_update_every = 10_000,
 #     max_ep_len = 27000
 # )
 
+wandb_config = dict(
+    replay_size = 1_000_000,
+    seed = 0,
+    steps_per_epoch = 2000,
+    epochs = 5000,
+    gamma = 0.99,
+    lr = 0.00025,
+    batch_size = 32,
+    start_steps = 50_000,
+    update_after = 50_000,
+    update_every = 4,
+    epsilon_start = 1.0,
+    epsilon_end = 0.1,
+    epsilon_decay_steps = 1_000_000,
+    target_update_every = 10_000,
+    max_ep_len = 27000
+)
+
+
+### Use pre-trained model
 # wandb_config = dict(
 #     replay_size = 1_000_000,
 #     seed = 0,
@@ -376,50 +398,24 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 #     gamma = 0.99,
 #     lr = 0.00025,
 #     batch_size = 32,
-#     start_steps = 50_000,
+#     start_steps = 0,
 #     update_after = 50_000,
 #     update_every = 4,
-#     epsilon_start = 1.0,
+#     epsilon_start = 0.4933,
 #     epsilon_end = 0.1,
-#     epsilon_step = 1e-6,
+#     epsilon_decay_steps = 1_000_000,
 #     target_update_every = 10_000,
-#     max_ep_len = 27000
+#     max_ep_len = 27000,
+#     wandb_model_name = "pyt_save/model.pt",
+#     wandb_restore_run_path = "frangipane/dqn/nlcbd9ns"  # run_path pointing to a serialized torch model
 # )
 
-# addl_config = dict(
-#     actor_critic=CNNCritic,
-#     record_video = False,
-#     record_video_every = 2000,
-#     save_freq = 150
-# )
-
-
-### Use pre-trained model
-wandb_config = dict(
-    replay_size = 1_000_000,
-    seed = 0,
-    steps_per_epoch = 80*32,
-    epochs = 2000,
-    gamma = 0.99,
-    lr = 0.00025,
-    batch_size = 32,
-    start_steps = 0,
-    update_after = 50_000,
-    update_every = 4,
-    epsilon_start = 0.4933,
-    epsilon_end = 0.1,
-    epsilon_step = 1e-6,
-    target_update_every = 10_000,
-    max_ep_len = 27000,
-    wandb_model_name = "pyt_save/model.pt",
-    wandb_restore_run_path = "frangipane/dqn/nlcbd9ns"  # run_path pointing to a serialized torch model    
-)
 
 addl_config = dict(
     actor_critic=CNNCritic,
     record_video = False,
     record_video_every = 2000,
-    save_freq = 150,
+    save_freq = 500,
 )
 
 
@@ -437,7 +433,7 @@ addl_config = dict(
 #     update_every = 1,
 #     epsilon_start = 1.0,
 #     epsilon_end = 0.1,
-#     epsilon_step = 4e-5,
+#     epsilon_decay_steps = 5000,
 #     target_update_every = 3000
 # )
 

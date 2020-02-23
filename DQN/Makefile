@@ -1,14 +1,14 @@
 SHELL		:= /bin/bash
 
 
-dqn-local-eval:
+eval-local:
 	python watch_agent_play.py
 
-dqn-cloud-eval:
+eval-cloud:
 	az ml run submit-script -c eval -e dqn_atari --source-directory .
 
-dqn-local-train:
+train-local:
 	python dqn.py
 
-dqn-cloud-train:
+train-cloud:
 	az ml run submit-script -c test -e dqn_atari --source-directory .

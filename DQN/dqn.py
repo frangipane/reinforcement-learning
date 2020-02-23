@@ -3,6 +3,7 @@ https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/ddpg
 and
 https://github.com/openai/spinningup/tree/master/spinup/algos/pytorch/sac
 """
+import os
 import time
 from copy import deepcopy
 import numpy as np
@@ -164,7 +165,8 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
         wandb_restore_run_path (str): (optional) if wandb_model_name is specified, then
             this should specify path e.g. '$USER_NAME/$PROJECT_NAME/$RUN_ID'
     """
-    logger = EpochLogger(exp_name='dqn', output_dir=wandb.run.dir)
+    logger_out_dir = wandb.run.dir
+    logger = EpochLogger(exp_name='dqn', output_dir=logger_out_dir)
     logger.save_config(locals())
 
     torch.manual_seed(seed)
@@ -218,7 +220,6 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
         # MSE loss against Bellman backup
         # loss_q = ((q - backup)**2).mean()
         loss_q = F.smooth_l1_loss(q[:, 0], backup).mean()
-        # TODO: clip Bellman error b/w -1 and 1
 
         # Useful info for logging
         loss_info = dict(QVals=q.detach().cpu().numpy())
@@ -259,9 +260,6 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
     epsilon = epsilon_start
     o, ep_ret, ep_len = env.reset(), 0, 0
 
-    episode_rewards_start_idx_for_epoch = 0
-    episode_rewards_end_idx_for_epoch = 0
-
     for t in range(total_steps):
 
         if t > start_steps and epsilon > epsilon_end:
@@ -276,7 +274,8 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
             a = env.action_space.sample()
 
         # Step the env
-        o2, r, d, _ = env.step(a)
+        o2, r, d, info = env.step(a)
+        # TODO: clip rewards b/w -1 and 1
         ep_ret += r
         ep_len += 1
 
@@ -294,6 +293,14 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
         # End of episode handling
         if d or (ep_len == max_ep_len):
             logger.store(EpRet=ep_ret, EpLen=ep_len)
+
+            # End of multi-life game handling
+            lives = info.get('ale.lives')
+            if lives is not None and lives == 0:
+                # Assumes env has been wrapped by Monitor.
+                logger.store(RawRet=env.get_episode_rewards()[-1])
+                logger.store(RawLen=env.get_episode_lengths()[-1])
+
             o, ep_ret, ep_len = env.reset(), 0, 0
 
         # Update handling
@@ -316,32 +323,21 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
                 logger.save_state({'env': env}, None)
-
-            # Assumes env has been wrapped by Monitor.
-            # attributes (type list) from Monitor
-            episode_rewards_start_idx_for_epoch = episode_rewards_end_idx_for_epoch
-            episode_rewards_end_idx_for_epoch = len(env.get_episode_rewards())
-            episode_rewards_slice = slice(episode_rewards_start_idx_for_epoch,
-                                          episode_rewards_end_idx_for_epoch)
-            raw_episode_rewards = env.get_episode_rewards()[episode_rewards_slice]
-            raw_episode_lengths = env.get_episode_lengths()[episode_rewards_slice]
+                # Save the model to wandb every epoch instead of waiting till the end
+                wandb.save(os.path.join(logger_out_dir, 'pyt_save/model.pt'))
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
             logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
             logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            logger.log_tabular('QVals', with_min_and_max=True)  # will throw KeyError if update period > epoch period
+            logger.log_tabular('QVals', with_min_and_max=True)
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
             logger.log_tabular('EpisodeId', env.episode_id)
-            logger.log_tabular('AvgRawEpRewards', np.mean(raw_episode_rewards))
-            logger.log_tabular('MaxRawEpRewards', np.max(raw_episode_rewards))
-            logger.log_tabular('MinRawEpRewards', np.min(raw_episode_rewards))
-            logger.log_tabular('AvgRawEpLen', np.mean(raw_episode_lengths))
-            logger.log_tabular('MaxRawEpLen', np.max(raw_episode_lengths))
-            logger.log_tabular('MinRawEpLen', np.min(raw_episode_lengths))
+            logger.log_tabular('RawRet', with_min_and_max=True)
+            logger.log_tabular('RawLen', average_only=True)
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
@@ -352,11 +348,10 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 
 # for testing
 # wandb_config = dict(
-#     replay_size = 20_000,
+#     replay_size = 1000,
 #     seed = 0,
 #     steps_per_epoch = 640,
-#     #epochs = 100,
-#     epochs = int(1e7 / 640),
+#     epochs = 4,
 #     gamma = 0.99,
 #     lr = 0.00025,
 #     batch_size = 64,
@@ -452,7 +447,7 @@ if __name__ == '__main__':
 
     wandb.init(project="dqn",
                config=wandb_config,
-               tags=['BreakoutNoFrameskip-v4', 'from_pretrained'])
+               tags=['BreakoutNoFrameskip-v4'])
 
     env = make_atari('BreakoutNoFrameskip-v4')
     env = Monitor(env,

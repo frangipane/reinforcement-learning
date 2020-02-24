@@ -11,4 +11,4 @@ train-local:
 	python dqn.py
 
 train-cloud:
-	az ml run submit-script -c test -e dqn_atari --source-directory .
+	az ml run submit-script -c train -e dqn_atari --source-directory .

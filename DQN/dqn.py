@@ -322,9 +322,22 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 
             # Save model
             if (epoch % save_freq == 0) or (epoch == epochs):
-                logger.save_state({'env': env}, None)
-                # Save the model to wandb every epoch instead of waiting till the end
-                wandb.save(os.path.join(logger_out_dir, 'pyt_save/model.pt'))
+                logger.save_state({'env': env}, None)  # note, this includes full model pickle
+
+                # Save the model parameters to wandb every save_freq epoch
+                # instead of waiting till the end
+                state = {
+                    'epoch': epoch,
+                    'ac_state_dict': ac.state_dict(),
+                    'ac_q_state_dict': ac.q.state_dict(),  # not sure this is necessary
+                    'q_optimizer': q_optimizer.state_dict(),
+                    'q_loss': logger.epoch_dict['LossQ'][-1],
+                }
+                # hack for wandb: should output the model in the wandb.run.dir to avoid
+                # problems syncing the model in the cloud with wandb's files
+                state_fname = os.path.join(wandb.run.dir, f"state_dict.pt")
+                torch.save(state, state_fname)
+                wandb.save(state_fname)
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
@@ -448,6 +461,10 @@ if __name__ == '__main__':
     wandb.init(project="dqn",
                config=wandb_config,
                tags=['BreakoutNoFrameskip-v4'])
+    # this is a wandb hack for now.  In order to save the model to wandb
+    # synchronously, this has to be called BEFORE the model is written, AND
+    # (implicit) stick with writing the model to the wandb.run.dir.
+    wandb.save("state_dict.pt")
 
     env = make_atari('BreakoutNoFrameskip-v4')
     env = Monitor(env,

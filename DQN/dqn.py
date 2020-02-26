@@ -348,9 +348,11 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
             logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
-            logger.log_tabular('EpisodeId', env.episode_id)
-            logger.log_tabular('RawRet', with_min_and_max=True)
-            logger.log_tabular('RawLen', average_only=True)
+            if hasattr(env, 'episode_id'):
+                logger.log_tabular('EpisodeId', env.episode_id)
+            if 'RawRet' in logger.epoch_dict:
+                logger.log_tabular('RawRet', with_min_and_max=True)
+                logger.log_tabular('RawLen', average_only=True)
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 
@@ -455,8 +457,9 @@ addl_config = dict(
 
 
 if __name__ == '__main__':
-    #wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
-    #dqn(lambda : gym.make('CartPole-v1'), **wandb_config, **addl_config)
+    # wandb.init(project="dqn", config=wandb_config, tags=['CartPole-v1'])
+    # env = gym.make('CartPole-v1')
+    # dqn(env, **wandb_config, **addl_config)
 
     wandb.init(project="dqn",
                config=wandb_config,

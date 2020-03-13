@@ -341,18 +341,26 @@ def dqn(env, actor_critic=MLPCritic, replay_size=500,
 
             # Log info about epoch
             logger.log_tabular('Epoch', epoch)
-            logger.log_tabular('EpRet', with_min_and_max=True)  # will error if episode lasts longer than epoch since no returns stored
-            logger.log_tabular('EpLen', average_only=True)
             logger.log_tabular('TotalEnvInteracts', t)
-            logger.log_tabular('QVals', with_min_and_max=True)
-            logger.log_tabular('LossQ', average_only=True)
             logger.log_tabular('Time', time.time()-start_time)
             logger.log_tabular('Epsilon', epsilon)
             if hasattr(env, 'episode_id'):
                 logger.log_tabular('EpisodeId', env.episode_id)
-            if 'RawRet' in logger.epoch_dict:
-                logger.log_tabular('RawRet', with_min_and_max=True)
-                logger.log_tabular('RawLen', average_only=True)
+
+            # If a quantity has not been calculated/stored yet, do not log it.  This can
+            # happen, e.g. if NN update length or episode length exceeds num steps in epoch.
+            to_log = [{'key': 'QVals', 'with_min_and_max': True},
+                      {'key': 'LossQ', 'average_only': True},
+                      {'key': 'EpRet', 'with_min_and_max': True},
+                      {'key': 'EpLen', 'average_only': True},
+                      {'key': 'RawRet', 'with_min_and_max': True},
+                      {'key': 'RawLen', 'average_only': True}]
+
+            for log_tabular_kwargs in to_log:
+                key = log_tabular_kwargs['key']
+                if key in logger.epoch_dict and len(logger.epoch_dict[key]) > 0:
+                    logger.log_tabular(**log_tabular_kwargs)
+
             wandb.log(logger.log_current_row, step=epoch)
             logger.dump_tabular()
 

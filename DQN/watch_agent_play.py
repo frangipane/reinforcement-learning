@@ -79,18 +79,18 @@ monitor_kwargs = dict(
     directory=f'/tmp/openai-gym/{int(time.time())}',
     force=True,
     resume=False,
-    video_callable=False
+    video_callable=lambda ep_i: ep_i % 5 == 0
 )
 
 torch_load_kwargs = dict(
-    f=wandb.restore("pyt_save/model.pt", run_path="frangipane/dqn/4ub3ftgh").name,
+    f=wandb.restore("pyt_save/model.pt", run_path="frangipane/dqn/30fhfv6y").name,
     map_location=device,
 )
 
 play_game_config = dict(
     torch_load_kwargs=torch_load_kwargs,
     actor_critic=CNNCritic,
-    episodes=150,
+    episodes=10,
     render=False,
     logger_kwargs={'exp_name': 'dqn-eval', 'output_dir': wandb.run.dir}
 )

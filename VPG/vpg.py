@@ -298,6 +298,9 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         pi_loss.backward()
         pi_optimizer.step()
 
+        logger.store(LossPi=pi_loss.item())
+        #TODO: log policy entropy
+
     def update_v(data):
         for s in range(train_v_iters):
             v_optimizer.zero_grad()
@@ -305,11 +308,15 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             v_loss.backward()
             v_optimizer.step()
 
+            logger.store(LossV=v_loss.item())
+
     total_steps = steps_per_epoch * epochs
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
 
     t = 0  # total environment interactions
+
+    # Update policy once per epoch
     for epoch in range(epochs):
         for t_epoch in range(steps_per_epoch):
             t += 1
@@ -320,12 +327,20 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
             ep_ret += r
             ep_len += 1
 
+            # Ignore the "done" signal if it comes from hitting the time
+            # horizon (that is, when it's an artificial terminal signal
+            # that isn't based on the agent's state)
+            d = False if ep_len==max_ep_len else d
+
             o = o2
 
             # If trajectory is finished, calculate rewards to go,
             # then calculate the Advantage.
             if d is True or (ep_len == max_ep_len) or (t_epoch + 1 == steps_per_epoch):
                 buff.finish_trajectory()
+                logger.store(EpRet=ep_ret,
+                             EpLen=ep_len, )
+
                 o, ep_ret, ep_len = env.reset(), 0, 0
 
             # Calculate policy gradient when we've collected t_epoch time steps.
@@ -348,8 +363,34 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
         if (epoch % save_freq == 0) or (epoch == epochs):
             logger.save_state({'env': env}, None)  # note, this includes full model pickle
 
+        # Log info about epoch
+        logger.log_tabular('Epoch', epoch)
+        logger.log_tabular('TotalEnvInteracts', t)
+        logger.log_tabular('Time', time.time() - start_time)
+        if hasattr(env, 'episode_id'):
+            logger.log_tabular('EpisodeId', env.episode_id)
+
+        # If a quantity has not been calculated/stored yet, do not log it.  This can
+        # happen, e.g. if NN update length or episode length exceeds num steps in epoch.
+        to_log = [{'key': 'LossV', 'average_only': True},
+                  {'key': 'LossPi', 'average_only': True},
+                  {'key': 'EpRet', 'with_min_and_max': True},
+                  {'key': 'EpLen', 'average_only': True},
+                  {'key': 'RawRet', 'with_min_and_max': True},
+                  {'key': 'RawLen', 'average_only': True}]
+
+        for log_tabular_kwargs in to_log:
+            key = log_tabular_kwargs['key']
+            if key in logger.epoch_dict and len(logger.epoch_dict[key]) > 0:
+                logger.log_tabular(**log_tabular_kwargs)
+
+        wandb.log(logger.log_current_row, step=epoch)
+        logger.dump_tabular()
+
+        # reset buffer
         buff = VPGBuffer(steps_per_epoch, gamma, obs_dim, act_dim)
 
+    # Save final model as a state dict
     state = {
         'epoch': epoch,
         'pi_state_dict': ac.pi.state_dict(),
@@ -361,27 +402,32 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
     # problems syncing the model in the cloud with wandb's files
     state_fname = os.path.join(logger_kwargs['output_dir'], f"state_dict.pt")
     torch.save(state, state_fname)
-    #wandb.save(state_fname)
+    wandb.save(state_fname)
     pylogger.info(f"Saved state dict to {state_fname}")
     env.close()
 
 config = dict(
-    actor_critic=MLPActorCritic,
-    ac_kwargs=dict(),
     seed=0, 
-    steps_per_epoch=20,  # this is also the buffer size
-    epochs=5,
+    steps_per_epoch=500,  # this is also the buffer size
+    epochs=100,
     gamma=0.99,
     pi_lr=3e-4,
     vf_lr=1e-3,
     train_v_iters=80,
-    max_ep_len=1000,
-    # logger_out_dir = wandb.run.dir
-    logger_kwargs={'exp_name': 'vpg', 'output_dir': f'/tmp/vpg/{time.time()}'},
-    save_freq=3
+    max_ep_len=200,
+    save_freq=20
 )
 
+wandb.init(project="vpg", config=config, tags=['CartPole-v1'])
+
+addl_config = dict(
+    actor_critic=MLPActorCritic,
+    ac_kwargs=dict(),
+    logger_kwargs={'exp_name': 'vpg', 'output_dir': wandb.run.dir}
+                   #'output_dir': f'/tmp/vpg/{time.time()}'},
+)
     
 if __name__ == '__main__':
+    wandb.save("state_dict.pt")
     env = gym.make('CartPole-v1')
-    vpg(env, **config)
+    vpg(env, **config, **addl_config)

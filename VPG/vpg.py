@@ -408,14 +408,14 @@ def vpg(env, actor_critic=MLPActorCritic, ac_kwargs=dict(), seed=0,
 
 config = dict(
     seed=0, 
-    steps_per_epoch=500,  # this is also the buffer size
-    epochs=100,
+    steps_per_epoch=4000,  # this is also the buffer size
+    epochs=2000,
     gamma=0.99,
     pi_lr=3e-4,
     vf_lr=1e-3,
     train_v_iters=80,
-    max_ep_len=200,
-    save_freq=20
+    max_ep_len=500,
+    save_freq=200
 )
 
 wandb.init(project="vpg", config=config, tags=['CartPole-v1'])

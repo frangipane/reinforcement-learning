@@ -4,10 +4,12 @@ Copied from https://github.com/openai/spinningup/blob/master/spinup/algos/pytorc
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.optim import Adam
 import gym
 import time
-import spinup.algos.pytorch.vpg.core as core
+
+import core
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
@@ -16,7 +18,7 @@ import wandb
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print("\n ******** Number of GPUs:", torch.cuda.device_count())
 
 class VPGBuffer:
     """
@@ -91,7 +93,7 @@ class VPGBuffer:
         self.adv_buf = (self.adv_buf - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     adv=self.adv_buf, logp=self.logp_buf)
-        return {k: torch.as_tensor(v, dtype=torch.float32) for k,v in data.items()}
+        return {k: torch.as_tensor(v, dtype=torch.float32, device=device) for k,v in data.items()}
 
 
 
@@ -205,9 +207,9 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
 
     # Create actor-critic module
     ac = actor_critic(env.observation_space, env.action_space, **ac_kwargs)
-    if torch.cuda.device_count() > 1:
-        ac.pi = nn.DataParallel(ac.pi)
-        ac.v = nn.DataParallel(ac.v)
+    # if torch.cuda.device_count() > 1:
+    #     ac.pi = nn.DataParallel(ac.pi)
+    #     ac.v = nn.DataParallel(ac.v)
 
     ac.to(device)
 
@@ -287,7 +289,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
     # Main loop: collect experience in env and update/log each epoch
     for epoch in range(epochs):
         for t in range(local_steps_per_epoch):
-            a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32))
+            a, v, logp = ac.step(torch.as_tensor(o, dtype=torch.float32, device=device))
 
             next_o, r, d, _ = env.step(a)
             ep_ret += r
@@ -309,7 +311,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
                     print('Warning: trajectory cut off by epoch at %d steps.'%ep_len, flush=True)
                 # if trajectory didn't reach terminal state, bootstrap value target
                 if timeout or epoch_ended:
-                    _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32))
+                    _, v, _ = ac.step(torch.as_tensor(o, dtype=torch.float32, device=device))
                 else:
                     v = 0
                 buf.finish_path(v)
@@ -350,14 +352,12 @@ if __name__ == '__main__':
     parser.add_argument('--l', type=int, default=2)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--seed', '-s', type=int, default=0)
-    parser.add_argument('--cpu', type=int, default=8)
+    parser.add_argument('--cpu', type=int, default=4)
     parser.add_argument('--steps', type=int, default=4000)
-    parser.add_argument('--epochs', type=int, default=50)
+    parser.add_argument('--epochs', type=int, default=200)
     args = parser.parse_args()
 
-    mpi_fork(args.cpu)  # run parallel code with mpi
-
-    wandb.init(project="vpg", config=config, tags=['CartPole-v1', 'spinup'])
+    wandb.init(project="vpg", config=vars(args), tags=['CartPole-v1', 'spinup'])
     logger_kwargs={'exp_name': 'vpg', 'output_dir': wandb.run.dir}
 
     #mpi_fork(args.cpu)  # run parallel code with mpi

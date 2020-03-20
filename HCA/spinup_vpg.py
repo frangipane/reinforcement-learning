@@ -87,6 +87,7 @@ class VPGBuffer:
         self.ptr, self.path_start_idx = 0, 0
         # the next two lines implement the advantage normalization trick
         adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
+        #adv_mean, adv_std = mpi_statistics_scalar(self.adv_buf)
         self.adv_buf = (self.adv_buf - adv_mean) / adv_std
         data = dict(obs=self.obs_buf, act=self.act_buf, ret=self.ret_buf,
                     adv=self.adv_buf, logp=self.logp_buf)
@@ -186,7 +187,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
     """
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
-    setup_pytorch_for_mpi()
+    #setup_pytorch_for_mpi()
 
     # Set up logger and save configuration
     logger = EpochLogger(**logger_kwargs)
@@ -211,14 +212,15 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
     ac.to(device)
 
     # Sync params across processes
-    sync_params(ac)
+    #sync_params(ac)
 
     # Count variables
     var_counts = tuple(core.count_vars(module) for module in [ac.pi, ac.v])
     logger.log('\nNumber of parameters: \t pi: %d, \t v: %d\n'%var_counts)
 
     # Set up experience buffer
-    local_steps_per_epoch = int(steps_per_epoch / num_procs())
+    local_steps_per_epoch = steps_per_epoch
+    #local_steps_per_epoch = int(steps_per_epoch / num_procs())
     buf = VPGBuffer(obs_dim, act_dim, local_steps_per_epoch, gamma, lam)
 
     # Set up function for computing VPG policy loss
@@ -260,7 +262,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
         pi_optimizer.zero_grad()
         loss_pi, pi_info = compute_loss_pi(data)
         loss_pi.backward()
-        mpi_avg_grads(ac.pi)    # average grads across MPI processes
+        #mpi_avg_grads(ac.pi)    # average grads across MPI processes
         pi_optimizer.step()
 
         # Value function learning
@@ -268,7 +270,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
             vf_optimizer.zero_grad()
             loss_v = compute_loss_v(data)
             loss_v.backward()
-            mpi_avg_grads(ac.v)    # average grads across MPI processes
+            #mpi_avg_grads(ac.v)    # average grads across MPI processes
             vf_optimizer.step()
 
         # Log changes from update
@@ -357,6 +359,8 @@ if __name__ == '__main__':
 
     wandb.init(project="vpg", config=config, tags=['CartPole-v1', 'spinup'])
     logger_kwargs={'exp_name': 'vpg', 'output_dir': wandb.run.dir}
+
+    #mpi_fork(args.cpu)  # run parallel code with mpi
 
     vpg(lambda : gym.make(args.env), actor_critic=core.MLPActorCritic,
         ac_kwargs=dict(hidden_sizes=[args.hid]*args.l), gamma=args.gamma, 

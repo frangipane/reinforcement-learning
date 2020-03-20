@@ -1,0 +1,9 @@
+name: hca
+channels:
+dependencies:
+  - python=3.6
+  - jupyter
+  - pip
+  - pip:
+    - -e git+https://github.com/openai/spinningup.git@master#egg=spinup
+    - wandb

@@ -3,6 +3,8 @@ Ambiguous Bandit
 """
 import warnings
 import numpy as np
+import torch
+
 import gym
 from gym import spaces
 from gym.envs.toy_text.discrete import DiscreteEnv
@@ -30,14 +32,29 @@ class AmbiguousBanditEnv(DiscreteEnv):
     0    START        [0] a [1] a'
     1    HI           [0] a [1] a'
     2    LO           [0] a [1] a'
+
+    Args
+    ----
+    epsilon : float
+        crossover probability for an action
+    means : dict
+        mapping name of (bandit) state to mean of Gaussian reward
+    stds : dict
+        mapping name of (bandit) state to standard deviation of Gaussian reward
+    OHE_obs : bool
+        if False, obs is an integer >= 0, the default from the discrete space. 
+        if True, convert observation to a one hot encoded torch tensor of length 3,
+        where 3 is the number of states in the MDP.
     """
     def __init__(self, epsilon=0.1,
                  means={'HI': 2, 'LO': 1},
-                 stds={'HI': 1.5, 'LO': 1.5}):
+                 stds={'HI': 1.5, 'LO': 1.5},
+                 OHE_obs=True):
         # map integer from discrete observation_space to name
         self._name_for_state = {0: 'START', 1: 'HI', 2: 'LO'}
         self.means = means
         self.stds = stds
+        self._OHE_obs = OHE_obs
 
         nS = len(self._name_for_state)
         nA = 2
@@ -63,7 +80,7 @@ class AmbiguousBanditEnv(DiscreteEnv):
     def step(self, a):
         assert self.action_space.contains(a)
 
-        transitions = self.P[self.s][a]
+        transitions = self.P[self.s][int(a)]
         i = categorical_sample([t[0] for t in transitions], self.np_random)
         p, s, d = transitions[i]
         if self.s == 0:
@@ -71,10 +88,20 @@ class AmbiguousBanditEnv(DiscreteEnv):
             r = self._bandit_reward(s)
         else:
             warnings.warn("In terminal state, should reset environment.")
-            r = 0
+            r = 0.
         self.s = s
         self.lastaction = a
+        if self._OHE_obs:
+            s = torch.nn.functional.one_hot(torch.as_tensor(s), self.nS)
         return (s, r, d, {"prob": p})
+
+    def reset(self):
+        self.s = categorical_sample(self.isd, self.np_random)
+        self.lastaction = None
+        if self._OHE_obs:
+            return torch.nn.functional.one_hot(torch.as_tensor(self.s), self.nS)
+        else:
+            return self.s
 
     def _bandit_reward(self, s):
         """Sample reward from bandit

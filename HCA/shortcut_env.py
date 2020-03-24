@@ -68,7 +68,8 @@ class ShortcutEnv(DiscreteEnv):
         self._OHE_obs = OHE_obs
 
         if random_start:
-            isd = np.ones(nS) / nS
+            isd = np.ones(nS) / (nS - 1)
+            isd[nS-1] = 0.  # don't ever start in terminal state
         else:
             # always start at first state
             isd = np.zeros(nS)
@@ -94,7 +95,7 @@ class ShortcutEnv(DiscreteEnv):
         super().__init__(nS, nA, P, isd)
 
     def step(self, a):
-        s, r, d, info = super().step(a)
+        s, r, d, info = super().step(int(a))
         if self._OHE_obs:
             s = torch.nn.functional.one_hot(torch.as_tensor(s), self.nS)
         return (s, r, d, info)

@@ -26,11 +26,11 @@ def plot_test_returns(returns_path_dir, returns_path_fname):
 
 
 config = dict(
-    ac_kwargs={'hidden_sizes': [256, 256]},
+    ac_kwargs={'hidden_sizes': []},
     gamma=0.99,
     seed=0,
     max_ep_len=1,
-    steps_per_epoch=64,
+    steps_per_epoch=128,
     epochs=100,
     n_test_episodes=100
 )

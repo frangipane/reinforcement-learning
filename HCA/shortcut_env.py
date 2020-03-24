@@ -68,7 +68,8 @@ class ShortcutEnv(DiscreteEnv):
         self._OHE_obs = OHE_obs
 
         if random_start:
-            isd = np.ones(nS) / nS
+            isd = np.ones(nS) / (nS - 1)
+            isd[nS-1] = 0.  # don't ever start in terminal state
         else:
             # always start at first state
             isd = np.zeros(nS)

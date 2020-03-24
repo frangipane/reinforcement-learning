@@ -95,7 +95,7 @@ class ShortcutEnv(DiscreteEnv):
         super().__init__(nS, nA, P, isd)
 
     def step(self, a):
-        s, r, d, info = super().step(a)
+        s, r, d, info = super().step(int(a))
         if self._OHE_obs:
             s = torch.nn.functional.one_hot(torch.as_tensor(s), self.nS)
         return (s, r, d, info)

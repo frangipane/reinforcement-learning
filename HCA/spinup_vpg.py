@@ -101,7 +101,7 @@ class VPGBuffer:
 def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0, 
         steps_per_epoch=4000, epochs=50, gamma=0.99, pi_lr=3e-4,
         vf_lr=1e-3, train_v_iters=80, lam=0.97, max_ep_len=1000,
-        logger_kwargs=dict(), save_freq=10):
+        logger_kwargs=dict(), save_freq=10, n_test_episodes=100):
     """
     Vanilla Policy Gradient 
 
@@ -187,6 +187,8 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
         save_freq (int): How often (in terms of gap between epochs) to save
             the current policy and value function.
 
+        n_test_episodes (int): Number of episodes for test agent evaluation at
+            the end of each epoch.
     """
 
     # Special function to avoid certain slowdowns from PyTorch + MPI combo.
@@ -291,6 +293,26 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
                      DeltaLossPi=(loss_pi.item() - pi_l_old),
                      DeltaLossV=(loss_v.item() - v_l_old))
 
+    def test_agent():
+        test_env = env_fn()
+        o, test_ep_ret, test_ep_len = test_env.reset(), 0, 0
+
+        num_episodes = 0
+        while num_episodes < n_test_episodes:
+            a, _, _ = ac.step(torch.as_tensor(o, dtype=torch.float32, device=device))
+            o2, r, d, _ = env.step(a)
+            test_ep_ret += r
+            test_ep_len += 1
+
+            o = o2
+            timeout = ep_len == max_ep_len
+            terminal = d or timeout
+
+            if timeout or terminal:
+                logger.store(TestEpRet=test_ep_ret)
+                num_episodes += 1
+            o, test_ep_ret, test_ep_len = env.reset(), 0, 0
+
     # Prepare for interaction with environment
     start_time = time.time()
     o, ep_ret, ep_len = env.reset(), 0, 0
@@ -337,10 +359,13 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
         # Perform VPG update!
         update()
 
+        test_agent()
+
         # Log info about epoch
         logger.log_tabular('Epoch', epoch)
         logger.log_tabular('EpRet', with_min_and_max=True)
         logger.log_tabular('EpLen', average_only=True)
+        logger.log_tabular('TestEpRet', with_min_and_max=True)
         logger.log_tabular('VVals', with_min_and_max=True)
         logger.log_tabular('TotalEnvInteracts', (epoch+1)*steps_per_epoch)
         logger.log_tabular('LossPi', average_only=True)

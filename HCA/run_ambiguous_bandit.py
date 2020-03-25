@@ -10,8 +10,10 @@ config = dict(
     ac_kwargs={'hidden_sizes': []},
     gamma=0.99,
     seed=0,
+    pi_lr=0.2,
+    vf_lr=0.2,
     max_ep_len=1,
-    steps_per_epoch=128,
+    steps_per_epoch=2,
     epochs=100,
     n_test_episodes=100
 )

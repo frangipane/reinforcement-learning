@@ -80,13 +80,13 @@ class ShortcutEnv(DiscreteEnv):
         P = {o: {} for o in range(n)}
 
         for o in range(nS-2):
-            P[o][a_shortcut] = [(1.0, final_state, final_reward, True)]
-            P[o][a_long] = [(epsilon, final_state, final_reward, True),
+            P[o][a_shortcut] = [(1.0, final_state, final_reward + step_penalty, True)]
+            P[o][a_long] = [(epsilon, final_state, final_reward + step_penalty, True),
                             (1-epsilon, o + 1, step_penalty, False)]
 
         # penultimate state
-        P[final_state - 1][a_shortcut] = [(1.0, final_state, final_reward, True)]
-        P[final_state - 1][a_long] = [(1.0, final_state, final_reward, True)]
+        P[final_state - 1][a_shortcut] = [(1.0, final_state, final_reward + step_penalty, True)]
+        P[final_state - 1][a_long] = [(1.0, final_state, final_reward + step_penalty, True)]
 
         # final state
         P[final_state][a_shortcut] = [(1.0, final_state, 0, True)]

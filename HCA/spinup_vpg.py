@@ -311,7 +311,7 @@ def vpg(env_fn, actor_critic=core.MLPActorCritic, ac_kwargs=dict(),  seed=0,
             if timeout or terminal:
                 logger.store(TestEpRet=test_ep_ret)
                 num_episodes += 1
-            o, test_ep_ret, test_ep_len = env.reset(), 0, 0
+                o, test_ep_ret, test_ep_len = env.reset(), 0, 0
 
     # Prepare for interaction with environment
     start_time = time.time()

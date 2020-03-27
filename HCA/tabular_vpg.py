@@ -143,7 +143,7 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
             o, ep_ret, ep_len = env.reset(), 0, 0
 
     print('pi', ac.pi, flush=True)
-    print('logits', ac.logits, flush=True)
+    print('logits_pi', ac.logits_pi, flush=True)
     print('value', ac.V, flush=True)
 
 

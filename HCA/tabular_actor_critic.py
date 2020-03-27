@@ -53,3 +53,49 @@ class TabularVPGActorCritic(BaseTabularActorCritic):
         dlogits_pi, dV = self.compute_errors(traj)
         self.logits_pi += self.pi_lr * dlogits_pi
         self.V += self.vf_lr * dV
+
+
+class TabularReturnHCA(BaseTabularActorCritic):
+    """
+    Discrete observation and action space
+    """
+    def __init__(self, obs_dim, act_dim, return_bins,
+                 pi_lr=0.1, vf_lr=0.1, h_lr=0.1):
+        """return_bins is a 1-dimensional np.array
+        """
+        self._return_bins = return_bins
+        num_bins = len(return_bins)
+        self.logits_h = np.zeros((act_dim, obs_dim, num_bins))
+        self.h_lr = h_lr
+        super().__init__(obs_dim, act_dim, pi_lr, vf_lr)
+
+    @property
+    def h(self):
+        Z = np.exp(self.logits_h).sum(axis=0, keepdims=True)
+        h = np.exp(self.logits_h) / Z
+        return h
+
+    def compute_errors(self, traj):
+        T = len(traj.states)
+        dlogits_pi = np.zeros_like(self.pi)
+        dV = np.zeros_like(self.V)
+        dlogits_h = np.zeros_like(self.h)
+
+        for i in range(T):
+            x_s, a_s, G = traj.states[i], traj.actions[i], traj.returns[i]
+            G_bin_ind = (np.abs(self._return_bins - G)).argmin()
+            hca_factor = (1. - self.pi[x_s, :] / self.h[:, x_s, G_bin_ind])
+            G_hca = G * hca_factor
+
+            dlogits_pi[x_s, a_s] += G_hca[a_s]
+            dlogits_pi[x_s] -= self.pi[x_s] * G_hca[a_s]
+            dV[x_s] += (G - self.V[x_s])
+            dlogits_h[a_s, x_s, G_bin_ind] += 1
+            dlogits_h[:, x_s, G_bin_ind] -= self.h[:, x_s, G_bin_ind]
+        return dlogits_pi, dV, dlogits_h
+
+    def update(self, traj):
+        dlogits_pi, dV, dlogits_h = self.compute_errors(traj)
+        self.logits_pi += self.pi_lr * dlogits_pi
+        self.V += self.vf_lr * dV
+        self.logits_h += self.h_lr * dlogits_h

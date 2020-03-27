@@ -4,6 +4,7 @@ import wandb
 #from spinup_vpg import vpg
 from tabular_vpg import vpg
 import shortcut_env
+import tabular_actor_critic
 from utils import plot_test_returns
 
 # spinup_vpg config
@@ -27,10 +28,12 @@ config = dict(
     gamma=0.99,
     lam=0.95,
 )
+
 if __name__ == '__main__':
     wandb.init(project="hca", config=config, tags=['shortcut_env', 'tabular_vpg'])
     logger_out_dir = wandb.run.dir
     logger_kwargs={'exp_name': 'hca', 'output_dir': logger_out_dir}
-    vpg(shortcut_env.ShortcutEnv, **config, logger_kwargs=logger_kwargs)
+    vpg(shortcut_env.ShortcutEnv, **config, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
+        logger_kwargs=logger_kwargs)
 
     plot_test_returns(logger_out_dir, 'progress.txt')

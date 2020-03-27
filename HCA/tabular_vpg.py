@@ -89,10 +89,27 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
 
     traj = Trajectory(gamma, lam)
 
-    o, ep_ret, ep_len = env.reset(), 0, 0
-
-    total_env_interacts = 0
+    # Run test agent before any training happens
     episode = 0
+    test_agent()
+    print('Mean test returns from random agent:', np.mean(logger.epoch_dict['TestEpRet']), flush=True)
+    logger.log_tabular('Epoch', episode)
+    logger.log_tabular('TestEpRet', with_min_and_max=True)
+    logger.log_tabular('TestEpLen', with_min_and_max=True)
+    # Hack logger values for compatibility with main logging header keys
+    logger.log_tabular('EpRet', 0)
+    logger.log_tabular('EpLen', 0)
+    logger.log_tabular('AverageVVals', 0)
+    logger.log_tabular('MaxVVals', 0)
+    logger.log_tabular('MinVVals', 0)
+    logger.log_tabular('StdVVals', 0)
+    logger.log_tabular('TotalEnvInteracts', 0)
+    wandb.log(logger.log_current_row, step=episode)
+    logger.dump_tabular()
+
+    episode += 1
+    o, ep_ret, ep_len = env.reset(), 0, 0
+    total_env_interacts = 0
 
     while episode < n_episodes:
         a, v = ac.step(o)

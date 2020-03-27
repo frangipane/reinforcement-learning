@@ -2,6 +2,7 @@ import time
 import wandb
 
 #from spinup_vpg import vpg
+import tabular_actor_critic
 from tabular_vpg import vpg
 from ambiguous_bandit import AmbiguousBanditEnv
 from utils import plot_test_returns
@@ -36,6 +37,7 @@ if __name__ == '__main__':
     wandb.init(project="hca", config=config, tags=['ambiguous_bandit', 'tabular_vpg'])
     logger_out_dir = wandb.run.dir
     logger_kwargs={'exp_name': 'hca', 'output_dir': logger_out_dir}
-    vpg(env_fn=AmbiguousBanditEnv, **config, logger_kwargs=logger_kwargs)
+    vpg(env_fn=AmbiguousBanditEnv, **config, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
+        logger_kwargs=logger_kwargs)
 
     plot_test_returns(logger_out_dir, 'progress.txt')

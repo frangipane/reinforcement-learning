@@ -145,6 +145,8 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
     print('pi', ac.pi, flush=True)
     print('logits_pi', ac.logits_pi, flush=True)
     print('value', ac.V, flush=True)
+    if isinstance(ac, tabular_actor_critic.TabularReturnHCA):
+        print('h', ac.h, flush=True)
 
 
 if __name__ == '__main__':

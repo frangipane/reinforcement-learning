@@ -55,6 +55,11 @@ class TabularVPGActorCritic(BaseTabularActorCritic):
         self.V += self.vf_lr * dV
 
 
+#####################################################################
+# HCA algo implemen ted in compute_errors copied from
+# https://github.com/hca-neurips2019/hca/blob/master/hca_classes.py
+#####################################################################
+
 class TabularReturnHCA(BaseTabularActorCritic):
     """
     Discrete observation and action space
@@ -92,6 +97,51 @@ class TabularReturnHCA(BaseTabularActorCritic):
             dV[x_s] += (G - self.V[x_s])
             dlogits_h[a_s, x_s, G_bin_ind] += 1
             dlogits_h[:, x_s, G_bin_ind] -= self.h[:, x_s, G_bin_ind]
+        return dlogits_pi, dV, dlogits_h
+
+    def update(self, traj):
+        dlogits_pi, dV, dlogits_h = self.compute_errors(traj)
+        self.logits_pi += self.pi_lr * dlogits_pi
+        self.V += self.vf_lr * dV
+        self.logits_h += self.h_lr * dlogits_h
+
+
+class TabularStateHCA(BaseTabularActorCritic):
+    def __init__(self, obs_dim, act_dim,
+                 pi_lr=0.1, vf_lr=0.1, h_lr=0.1):
+        self.logits_h = np.zeros((act_dim, obs_dim, obs_dim))  # double check this
+        self.h_lr = h_lr
+        super().__init__(obs_dim, act_dim, pi_lr, vf_lr)
+
+    @property
+    def h(self):
+        Z = np.exp(self.logits_h).sum(axis=0, keepdims=True)
+        h = np.exp(self.logits_h) / Z
+        return h
+
+    def compute_errors(self, traj):
+        T = len(traj.states)
+        dlogits_pi = np.zeros_like(self.pi)
+        dV = np.zeros_like(self.V)
+        dlogits_h = np.zeros_like(self.h)
+
+        for i in range(T):
+            x_s, a_s, G = traj.states[i], traj.actions[i], traj.returns[i]
+            G_hca = np.zeros_like(self._actions, dtype=float)
+
+            for j in range(i, T):
+                x_t, r = traj.states[j], traj.rewards[j]
+                hca_factor = self.h[:, x_s, x_t].T - self.pi[x_s, :]
+                G_hca += traj.gamma**(j-i) * r * hca_factor
+
+                dlogits_h[a_s, x_s, x_t] += 1
+                dlogits_h[:, x_s, x_t] -= self.h[:, x_s, x_t]
+
+            for a in self._actions:
+                dlogits_pi[x_s, a] += G_hca[a]
+                dlogits_pi[x_s] -= self.pi[x_s] * G_hca[a]
+            dV[x_s] += (G - self.V[x_s])
+
         return dlogits_pi, dV, dlogits_h
 
     def update(self, traj):

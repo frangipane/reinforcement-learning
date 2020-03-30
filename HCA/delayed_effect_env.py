@@ -67,8 +67,8 @@ class DelayedEffectEnv(DiscreteEnv):
         self.rewarding_final_state = n+1
         self.penalizing_final_state = n+2
         self.nS = nS
-        self.sigma = 0.0
-        self.final_reward = 1.0
+        self.sigma = sigma
+        self.final_reward = final_reward
         self.first_action = None
         self._OHE_obs = OHE_obs
 

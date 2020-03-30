@@ -108,9 +108,11 @@ class DelayedEffectEnv(DiscreteEnv):
             if self.first_action == 0:
                 o = self.rewarding_final_state
                 r = self.final_reward
-            else:
+            elif self.first_action == 1:
                 o = self.penalizing_final_state
                 r = -1 * self.final_reward
+            else:
+                raise ValueError
             d = True
             p = 1.0
         else:
@@ -123,6 +125,7 @@ class DelayedEffectEnv(DiscreteEnv):
         return (o, r, d, {"prob": p, "first_action": self.first_action})
 
     def reset(self):
+        self.first_action = None
         o = super().reset()
         if self._OHE_obs:
             o = torch.nn.functional.one_hot(torch.as_tensor(o), self.nS)

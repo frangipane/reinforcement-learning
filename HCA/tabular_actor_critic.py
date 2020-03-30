@@ -13,6 +13,9 @@ class BaseTabularActorCritic(ABC):
         self.pi_lr = pi_lr
         self.vf_lr = vf_lr
 
+    def __str__(self):
+        return self.__name__
+
     @property
     def pi(self):
         Z = np.exp(self.logits_pi).sum(axis=1, keepdims=True)

@@ -29,8 +29,12 @@ class Trajectory:
         self.values = []
         self.returns = []
         self.advantage = []
+        self.last_obs = None
+        self.last_val = None
 
-    def finish_path(self):
+    def finish_path(self, last_obs, last_val):
+        self.last_obs = last_obs
+        self.last_val = last_val
         # GAE-lambda advantage
         deltas = np.array(self.rewards) \
                  + self.gamma * np.append(np.array(self.values[1:]), 0.) \
@@ -124,7 +128,7 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
         o = o2
 
         if d is True:
-            traj.finish_path()
+            traj.finish_path(last_obs=o, last_val=0)
             ac.update(traj)
             test_agent()
 

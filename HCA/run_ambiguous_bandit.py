@@ -30,8 +30,10 @@ from utils import plot_test_returns
 #     ac_kwargs={'pi_lr': 0.2, 'vf_lr': 0.2},
 #     n_episodes=100,
 #     n_test_episodes=100,
-#     gamma=0.99,
-#     lam=0.95,
+#     gamma=1.0,
+#     lam=1.0,
+#     actor_critic=tabular_actor_critic.TabularVPGActorCritic,
+#     algo='vpg',
 # )
 
 # return HCA config
@@ -46,6 +48,8 @@ from utils import plot_test_returns
 #     n_test_episodes=100,
 #     gamma=1.0,
 #     lam=1.0,
+#     actor_critic=tabular_actor_critic.TabularReturnHCA,
+#     algo='returnHCA',
 # )
 
 # state HCA config
@@ -54,18 +58,27 @@ config = dict(
                 'means': {'HI': 2, 'LO': 1},
                 'stds': {'HI': 1.5, 'LO': 1.5},
                 'epsilon': 0.1},
-    ac_kwargs={'pi_lr': 0.2, 'vf_lr': 0.2, 'h_lr': 0.2},
+    ac_kwargs={'pi_lr': 0.3, 'vf_lr': 0.3, 'h_lr': 0.4},
     n_episodes=100,
     n_test_episodes=100,
     gamma=1.0,
     lam=1.0,
+    actor_critic=tabular_actor_critic.TabularStateHCA,
+    algo='stateHCA',
+
 )
 
+
 if __name__ == '__main__':
-    wandb.init(project="hca", config=config, tags=['ambiguous_bandit', 'state_hca'])
+    algo = config.pop('algo')
+
+    wandb.init(
+        project="hca",
+        config=config,
+        name=algo + f"|AmbiguousBanditEnv",
+        tags=['ambiguous_bandit', algo])
     logger_out_dir = wandb.run.dir
     logger_kwargs={'exp_name': 'hca', 'output_dir': logger_out_dir}
-    vpg(env_fn=AmbiguousBanditEnv, **config, actor_critic=tabular_actor_critic.TabularStateHCA,
-        logger_kwargs=logger_kwargs)
+    vpg(env_fn=AmbiguousBanditEnv, **config, logger_kwargs=logger_kwargs)
 
     plot_test_returns(logger_out_dir, 'progress.txt')

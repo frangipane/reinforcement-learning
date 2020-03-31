@@ -132,8 +132,11 @@ class TabularStateHCA(BaseTabularActorCritic):
             x_s, a_s, G = traj.states[i], traj.actions[i], traj.returns[i]
             G_hca = np.zeros_like(self._actions, dtype=float)
 
-            for j in range(i, T):
-                x_t, r = traj.states[j], traj.rewards[j]
+            for j in range(i, T+1):
+                if j == T:
+                    x_t, r = traj.last_obs, traj.last_val
+                else:
+                    x_t, r = traj.states[j], traj.rewards[j]
                 hca_factor = self.h[:, x_s, x_t].T - self.pi[x_s, :]
                 G_hca += traj.gamma**(j-i) * r * hca_factor
 

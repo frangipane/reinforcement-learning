@@ -1,4 +1,5 @@
 import numpy as np
+import warnings
 from spinup.utils.logx import EpochLogger
 
 import core
@@ -11,9 +12,13 @@ class Trajectory:
     Size depends on length of trajectory, assuming
     episodic environment of small size for toy problems.
     """
-    def __init__(self, gamma=1.0, lam=0.95):
+    def __init__(self, gamma=1.0, lam=0.95, bootstrap_n=None):
         self.gamma = gamma
         self.lam = lam
+        self.bootstrap_n = bootstrap_n
+        if bootstrap_n is not None and lam != 1.0:
+            warnings.warn(
+                f"Using bootstrap_n of {bootstrap_n}; lambda {lam} will be ignored")
         self.reset()
 
     def store(self, obs, act, rew, val):
@@ -35,18 +40,32 @@ class Trajectory:
     def finish_path(self, last_obs, last_val):
         self.last_obs = last_obs
         self.last_val = last_val
-        # GAE-lambda advantage
-        deltas = np.array(self.rewards) \
-                 + self.gamma * np.append(np.array(self.values[1:]), 0.) \
-                 - np.array(self.values)
-        self.advantage = core.discount_cumsum(deltas, self.gamma * self.lam)
 
-        self.returns = core.discount_cumsum(np.array(self.rewards), self.gamma).tolist()  # rewards-to-go
+        deltas = np.array(self.rewards) \
+                 + self.gamma * np.append(np.array(self.values[1:]), last_val) \
+                 - np.array(self.values)
+
+        if self.bootstrap_n is None:
+            # GAE-lambda advantage
+            self.advantage = core.discount_cumsum(deltas, self.gamma * self.lam).tolist()
+            self.returns = core.discount_cumsum(np.array(self.rewards), self.gamma).tolist()  # rewards-to-go
+        else:
+            # see eq14 in High-Dimensional Continuous Control using Generalized Advantage Estimation
+            # https://arxiv.org/abs/1506.02438
+            n_states = len(self.states)
+            adv = np.zeros(n_states)
+            # TODO: vectorize this
+            deltas = np.append(deltas, np.zeros(self.bootstrap_n))
+            for t in range(n_states):
+                adv[t] = (self.gamma ** np.arange(self.bootstrap_n) \
+                         * deltas[t:t+self.bootstrap_n]).sum()
+            self.returns = (adv + np.array(self.values)).tolist()
+            self.advantage = adv.tolist()
 
 
 def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
         n_episodes=100, env_kwargs={}, logger_kwargs={}, ac_kwargs={},
-        n_test_episodes=100, gamma=0.99, lam=0.95):
+        n_test_episodes=100, gamma=0.99, lam=0.95, bootstrap_n=3):
     """
     Environment has discrete observation and action spaces, both
     low dimensional so policy and value functions can be stored
@@ -61,6 +80,9 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
 
         n_episodes (int): Number of episodes/rollouts of interaction (equivalent
             to number of policy updates) to perform.
+
+        bootstrap_n (int) : (optional) Number of reward steps to use with a bootstrapped
+            approximate Value function.  If None, use GAE-lambda advantage estimation.
     """
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
@@ -91,7 +113,7 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
                 episode += 1
                 o, test_ep_ret, test_ep_len = test_env.reset(), 0, 0
 
-    traj = Trajectory(gamma, lam)
+    traj = Trajectory(gamma, lam, bootstrap_n)
 
     # Run test agent before any training happens
     episode = 0

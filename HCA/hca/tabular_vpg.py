@@ -2,8 +2,8 @@ import numpy as np
 import warnings
 from spinup.utils.logx import EpochLogger
 
-import core
-import tabular_actor_critic
+import hca.core as core
+import hca.tabular_actor_critic as tabular_actor_critic
 import wandb
 
 

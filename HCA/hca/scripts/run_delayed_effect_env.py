@@ -2,10 +2,10 @@ import time
 import numpy as np
 import wandb
 
-import tabular_actor_critic
-from tabular_vpg import vpg
-import delayed_effect_env
-from utils import plot_test_returns
+import hca.tabular_actor_critic as tabular_actor_critic
+from hca.tabular_vpg import vpg
+from hca.envs.delayed_effect_env import DelayedEffectEnv
+from hca.utils import plot_test_returns
 
 
 # # tabular_vpg config
@@ -69,6 +69,6 @@ if __name__ == '__main__':
     logger_out_dir = wandb.run.dir
     logger_kwargs={'exp_name': 'hca', 'output_dir': logger_out_dir}
 
-    vpg(env_fn=delayed_effect_env.DelayedEffectEnv, **config, logger_kwargs=logger_kwargs)
+    vpg(env_fn=DelayedEffectEnv, **config, logger_kwargs=logger_kwargs)
 
     plot_test_returns(logger_out_dir, 'progress.txt')

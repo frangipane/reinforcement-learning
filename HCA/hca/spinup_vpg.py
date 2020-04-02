@@ -1,21 +1,21 @@
 """
 Copied from https://github.com/openai/spinningup/blob/master/spinup/algos/pytorch/vpg/vpg.py
 """
-
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.optim import Adam
-import gym
 import time
 
-import core
+import gym
 from gym.spaces import Box, Discrete
+import wandb
 from spinup.utils.logx import EpochLogger
 from spinup.utils.mpi_pytorch import setup_pytorch_for_mpi, sync_params, mpi_avg_grads
 from spinup.utils.mpi_tools import mpi_fork, mpi_avg, proc_id, mpi_statistics_scalar, num_procs
 
-import wandb
+import hca.core as core
+
 
 # if gpu is to be used
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

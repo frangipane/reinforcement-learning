@@ -2,6 +2,9 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 
+__all__ = ['TabularReturnHCA', 'TabularStateHCA', 'TabularVPGActorCritic']
+
+
 class BaseTabularActorCritic(ABC):
     """
     Discrete observation and action space

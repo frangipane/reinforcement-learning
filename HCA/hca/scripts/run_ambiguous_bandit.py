@@ -2,11 +2,11 @@ import time
 import numpy as np
 import wandb
 
-#from spinup_vpg import vpg
-import tabular_actor_critic
-from tabular_vpg import vpg
+#from hca.spinup_vpg import vpg
+import hca.tabular_actor_critic as tabular_actor_critic
+from hca.tabular_vpg import vpg
 from hca.envs.ambiguous_bandit import AmbiguousBanditEnv
-from utils import plot_test_returns
+from hca.utils import plot_test_returns
 
 # spinup_vpg config
 # config = dict(

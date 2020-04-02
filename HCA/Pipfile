@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[dev-packages]
+pytest = "*"
+flake8 = "*"
+
+[packages]
+hca = {path = ".", editable = true}
+wandb = "*"
+jupyter = "*"
+spinup = {git = "https://github.com/openai/spinningup.git", ref = "master", editable = true}
+
+
+[requires]
+python_version = "3.7"

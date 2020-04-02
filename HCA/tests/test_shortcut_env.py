@@ -30,7 +30,7 @@ def test_always_shortcut():
         o = env.reset()
         if o != final_state:
             o2, r, _, _ = env.step(action)
-            assert r == 1.0
+            assert r == 0.0
             assert o2 == n-1
 
 

@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from tabular_vpg import Trajectory
+from hca.tabular_vpg import Trajectory
 
 
 @pytest.fixture(scope='module')

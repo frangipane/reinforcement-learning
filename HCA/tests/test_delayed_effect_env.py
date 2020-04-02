@@ -4,7 +4,7 @@ Test expected returns from delayed effect env
 
 import pytest
 import numpy as np
-from delayed_effect_env import DelayedEffectEnv
+from hca.envs.delayed_effect_env import DelayedEffectEnv
 
 
 @pytest.fixture(scope='module')

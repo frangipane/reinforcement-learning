@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from shortcut_env import ShortcutEnv
+from hca.envs.shortcut_env import ShortcutEnv
 
 
 def run(env, n_episodes=100, action=None):

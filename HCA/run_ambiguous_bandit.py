@@ -5,7 +5,7 @@ import wandb
 #from spinup_vpg import vpg
 import tabular_actor_critic
 from tabular_vpg import vpg
-from ambiguous_bandit import AmbiguousBanditEnv
+from hca.envs.ambiguous_bandit import AmbiguousBanditEnv
 from utils import plot_test_returns
 
 # spinup_vpg config

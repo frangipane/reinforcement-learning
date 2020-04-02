@@ -8,7 +8,7 @@ sample mean falls within 2 standard deviations of the population mean.
 
 import pytest
 import numpy as np
-from ambiguous_bandit import AmbiguousBanditEnv
+from hca.envs.ambiguous_bandit import AmbiguousBanditEnv
 
 
 @pytest.fixture(scope='module')

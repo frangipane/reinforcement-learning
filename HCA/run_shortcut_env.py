@@ -3,7 +3,7 @@ import wandb
 
 #from spinup_vpg import vpg
 from tabular_vpg import vpg
-import shortcut_env
+import hca.envs.shortcut_env
 import tabular_actor_critic
 from utils import plot_test_returns
 

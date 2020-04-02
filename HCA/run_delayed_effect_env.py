@@ -4,7 +4,7 @@ import wandb
 
 import tabular_actor_critic
 from tabular_vpg import vpg
-import delayed_effect_env
+import hca.envs.delayed_effect_env
 from utils import plot_test_returns
 
 

@@ -86,6 +86,7 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
     """
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
+    log_wandb = logger_kwargs.get('output_dir').startswith('wandb')
 
     env = env_fn(**env_kwargs)
     test_env = env_fn(**env_kwargs)
@@ -130,7 +131,8 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
     logger.log_tabular('MinVVals', 0)
     logger.log_tabular('StdVVals', 0)
     logger.log_tabular('TotalEnvInteracts', 0)
-    wandb.log(logger.log_current_row, step=episode)
+    if log_wandb:
+        wandb.log(logger.log_current_row, step=episode)
     logger.dump_tabular()
 
     episode += 1
@@ -161,7 +163,8 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
             logger.log_tabular('TestEpLen', with_min_and_max=True)
             logger.log_tabular('VVals', with_min_and_max=True)
             logger.log_tabular('TotalEnvInteracts', total_env_interacts)
-            wandb.log(logger.log_current_row, step=episode)
+            if log_wandb:
+                wandb.log(logger.log_current_row, step=episode)
             logger.dump_tabular()
 
             traj.reset()

@@ -86,7 +86,7 @@ def vpg(env_fn, actor_critic=tabular_actor_critic.TabularVPGActorCritic,
     """
     logger = EpochLogger(**logger_kwargs)
     logger.save_config(locals())
-    log_wandb = logger_kwargs.get('output_dir').startswith('wandb')
+    log_wandb = 'wandb' in logger_kwargs.get('output_dir')
 
     env = env_fn(**env_kwargs)
     test_env = env_fn(**env_kwargs)

@@ -132,20 +132,25 @@ class TabularStateHCA(BaseTabularActorCritic):
         dlogits_h = np.zeros_like(self.h)
 
         for i in range(T):
-            x_s, a_s, G = traj.states[i], traj.actions[i], traj.returns[i]
+            x_s, a_s, G, r_s = traj.states[i], traj.actions[i], traj.returns[i], traj.rewards[i]
             G_hca = np.zeros_like(self._actions, dtype=float)
 
-            for j in range(i, T+1):
+            for j in range(i+1, T+1):
                 if j == T:
                     x_t, r = traj.last_obs, traj.last_val
                 else:
                     x_t, r = traj.states[j], traj.rewards[j]
-                hca_factor = self.h[:, x_s, x_t].T - self.pi[x_s, :]
+                #print('state, reward', x_t, r)
+                hca_factor = self.h[:, x_s, x_t].T / self.pi[x_s, :]
                 G_hca += traj.gamma**(j-i) * r * hca_factor
 
                 dlogits_h[a_s, x_s, x_t] += 1
                 dlogits_h[:, x_s, x_t] -= self.h[:, x_s, x_t]
 
+            # TODO: should this be an estimate?
+            #print('before', G_hca)
+            G_hca[a_s] += r_s
+            #print('after', G_hca)
             for a in self._actions:
                 dlogits_pi[x_s, a] += G_hca[a]
                 dlogits_pi[x_s] -= self.pi[x_s] * G_hca[a]
